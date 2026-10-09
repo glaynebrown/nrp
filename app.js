@@ -932,6 +932,7 @@
           <div class="neo-row">
             ${manometer()}
             <div class="readout">
+              <span class="pip-note" data-pipnote aria-live="polite"></span>
               <div class="set set-pip" data-set="pip">
                 <span class="set-name">PIP</span>
                 <button class="mini-btn" data-pipstep="-5" aria-label="Lower PIP by 5">−</button>
@@ -1074,6 +1075,7 @@
       mode = b.dataset.pm; $$('[data-pm]').forEach(x => x.classList.toggle('on', x === b));
       $('[data-squeeze]').hidden = mode !== 'hand'; playBtn.hidden = mode !== 'auto';
       $('.set-pip').hidden = $('[data-piphint]').hidden = mode === 'cpap';
+      $('[data-pipnote]').style.visibility = mode === 'cpap' ? 'hidden' : '';
       target = 5; t0 = performance.now();
     });
     // PIP: what you'd change in MR. SOPA. Goes up to 40 (the term max; preterm max is 30).
@@ -1082,6 +1084,9 @@
       pip = Math.max(20, Math.min(maxPip, Math.round(v / 5) * 5));
       $$('[data-pipstep]').forEach(b => b.disabled = (+b.dataset.pipstep < 0 ? pip <= 20 : pip >= maxPip));
       $('[data-pipv]').textContent = pip;
+      // Reminders at the limits: 30 = preterm max, 40 = the recommended max.
+      const note = { 30: 'Max for preterm', 40: 'Max PIP recommended' }[pip] || '';
+      const pn = $('[data-pipnote]'); pn.textContent = note; pn.classList.toggle('top', pip === 40);
       $('[data-gpip]').setAttribute('transform', `rotate(${dialAngle(pip)} 120 120)`);
       if (mode === 'hand' && target > 5) target = pip;
     }

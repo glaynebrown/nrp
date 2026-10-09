@@ -427,6 +427,8 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .readout { display: flex; flex-direction: column; gap: 8px; min-width: 150px; }
 /* Your two settings, shown steady (the needle + "breathe… two… three" show the rhythm). */
 .set { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 14px; }
+.pip-note { min-height: 18px; margin-bottom: -4px; padding-left: 12px; font-size: 13px; font-weight: 800; color: var(--ph-meds); }
+.pip-note.top { color: #9b2d35; }
 .set-name { font-weight: 800; font-size: 14px; letter-spacing: .06em; min-width: 42px; }
 .set b { font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
 .set-pip { background: var(--lav); }
