@@ -267,11 +267,11 @@
     flowMode === 'notes' ? renderNotesMode(body) : renderCards(body);
   }
 
-  /* Big step titles stay on one line: a title too long for the screen shrinks just enough to fit. */
+  /* One-line text (big step titles, "mg = mL" doses): if too long for the screen it shrinks just enough to fit. */
   function fitTitles(host) {
-    $$('.big-title', host).forEach(t => {
+    $$('.big-title, [data-fit]', host).forEach(t => {
       t.style.fontSize = '';
-      const room = t.parentElement.clientWidth, need = t.scrollWidth;
+      const room = t.clientWidth, need = t.scrollWidth;
       if (need > room) t.style.fontSize = Math.max(16, Math.floor(parseFloat(getComputedStyle(t).fontSize) * room / need)) + 'px';
     });
   }
@@ -686,8 +686,8 @@
       title: 'Epinephrine 1:10,000', phase: 'cpr',
       body: `${weightPicker()}
         <div class="doses">
-          <div class="dose"><span>IV / IO</span><b>${epiSay('epiIV')[0]} mg</b><b>= ${epiSay('epiIV')[1]} mL</b><small>then flush 3 mL NS</small></div>
-          <div class="dose"><span>ET (no line yet)</span><b>${epiSay('epiET')[0]} mg</b><b>= ${epiSay('epiET')[1]} mL</b></div>
+          <div class="dose"><span>IV / IO</span><b data-fit>${epiSay('epiIV')[0]} mg = ${epiSay('epiIV')[1]} mL</b><small>then flush 3 mL NS</small></div>
+          <div class="dose"><span>ET (no line yet)</span><b data-fit>${epiSay('epiET')[0]} mg = ${epiSay('epiET')[1]} mL</b></div>
         </div>
         ${run.epiAt ? `<p class="small">Last epi <b data-since="${run.epiAt}">${mmss(since(run.epiAt))}</b> ago. Repeat q 3–5 min.</p>` : ''}`,
       actions: [
@@ -808,6 +808,7 @@
         cue(`cd${cd.dataset.from}:${secs}`, left, 'check');
       }
     };
+    fitTitles(host);
     update(); tick = setInterval(update, 250);
     anims.push(() => clearInterval(tick));
   }
@@ -890,7 +891,7 @@
         const ml = calcW * m.mlPerKg, open = showMath.has(m.id);
         return `<div class="calc-card">
           <div class="calc-top"><span class="med">${esc(m.name)}</span><span class="rate">${m.mlPerKg} mL/kg</span></div>
-          ${m.mgPerMl ? `<div class="big-num two"><span>${fmtMg(ml * m.mgPerMl)} <small>mg</small></span><span>= ${fmt(ml)} <small>mL</small></span></div>`
+          ${m.mgPerMl ? `<div class="big-num two" data-fit>${fmtMg(ml * m.mgPerMl)} <small>mg</small> = ${fmt(ml)} <small>mL</small></div>`
           : `<div class="big-num">${fmt(ml)} <small>mL</small></div>`}
           ${syringe(ml)}
           <p class="small">${esc(m.note)}</p>
@@ -903,6 +904,7 @@
         </div>`;
       }).join('')}</div>
       <p class="small">Visual only. Follow your unit’s printed dosing guide at the bedside.</p>`;
+    fitTitles(host);
     const setW = v => { v = round2(v); if (!(v > 0 && v < 8)) return; calcW = v; local.set('calcW', v); renderCalc(); };
     $('[data-cw]', host).onchange = e => setW(parseFloat(e.target.value));
     $('[data-cr]', host).oninput = e => setW(parseFloat(e.target.value));
