@@ -2,10 +2,10 @@
    - App files: network first (an upload shows up right away), saved copy offline.
    - Firebase SDK + Google Fonts: saved copy first (versioned, never change).
    - Database/login go straight to the network; Firestore keeps its own offline copy. */
-const APP_CACHE = 'nrp-app-v1';
+const APP_CACHE = 'nrp-app-v2';
 const APP_FILES = [
   './', 'index.html', 'styles.css', 'app.js', 'content.js', 'store.js', 'ink.js',
-  'firebase-config.js', 'manifest.json', 'icon-192.png', 'apple-touch-icon.png',
+  'firebase-config.js', 'manifest.json', 'icon-192.png', 'apple-touch-icon.png', 'logo-nrp.png', 'logo-heart.png',
 ];
 const SDK = ['app', 'auth', 'firestore'].map(n => `https://www.gstatic.com/firebasejs/10.14.1/firebase-${n}-compat.js`);
 const HOME = new URL('./', self.location).href;
