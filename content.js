@@ -26,7 +26,7 @@ const NRP = {
     { id: 'g-golden', phase: 'first', title: 'Golden minute', timer: 'First 60 seconds', cards: ['rapid', 'initial', 'decision'] },
     { id: 'g-ppv', phase: 'vent', title: 'PPV', cards: ['ppv', 'mrsopa'] },
     { id: 'g-cpr', phase: 'cpr', title: 'CPR', cards: ['cpr', 'epi'] },
-    { id: 'g-vol', phase: 'meds', title: 'Hypovolemia? or PTX?', cards: ['volume'] },
+    { id: 'g-vol', phase: 'meds', title: 'Hypovolemia or PTX?', cards: ['volume'] },
     { id: 'g-debrief', phase: 'after', title: 'Debrief', cards: ['debrief'] },
   ],
 
@@ -126,7 +126,7 @@ const NRP = {
       link: { tab: 'meds', label: 'Do the math' },
     },
     {
-      id: 'volume', phase: 'meds', title: 'Hypovolemia? or PTX?',
+      id: 'volume', phase: 'meds', title: 'Hypovolemia or PTX?',
       summary: 'NS / O-neg blood 10 mL/kg · unequal chest rise = decompress',
       lines: [
         '**Hypovolemia:** NS or O-neg blood · ==10 mL/kg==',

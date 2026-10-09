@@ -179,7 +179,7 @@ li.big {
   background: var(--ph); color: var(--ph-on); font: 800 19px/1 var(--body);
 }
 .titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.big-title { font: 800 23px/1.2 var(--hand); color: var(--text); }
+.big-title { font: 800 23px/1.2 var(--hand); color: var(--text); white-space: nowrap; overflow: hidden; }
 .subnames { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 14px; color: var(--muted); font-weight: 600; }
 .subnames i { font-style: normal; font-weight: 800; color: var(--ph); margin-right: 4px; }
 .big .timer-tag { flex: none; }

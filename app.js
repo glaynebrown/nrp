@@ -241,6 +241,18 @@
     flowMode === 'notes' ? renderNotesMode(body) : renderCards(body);
   }
 
+  /* Big step titles stay on one line: a title too long for the screen shrinks just enough to fit. */
+  function fitTitles(host) {
+    $$('.big-title', host).forEach(t => {
+      t.style.fontSize = '';
+      const room = t.parentElement.clientWidth, need = t.scrollWidth;
+      if (need > room) t.style.fontSize = Math.max(16, Math.floor(parseFloat(getComputedStyle(t).fontSize) * room / need)) + 'px';
+    });
+  }
+  let fitTimer;
+  addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout(() => fitTitles(document), 100); });
+  document.fonts?.ready.then(() => fitTitles(document));
+
   function renderCards(host) {
     if (editMode && flowMode === 'ref') return renderEditCards(host);
     const study = flowMode === 'study';
@@ -274,6 +286,7 @@
         box.classList.toggle('open', open.has(id)); head.setAttribute('aria-expanded', open.has(id));
       }
     };
+    fitTitles(host);
   }
 
   function groupHtml(g, i, study) {
