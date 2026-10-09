@@ -168,6 +168,10 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 /* Step colors "Matching": every step uses the sage title color (Settings → Colors). */
 :root[data-steps="match"] :is(.ph-prep, .ph-first, .ph-vent, .ph-cpr, .ph-meds, .ph-after) { --ph: var(--title); --ph-on: var(--title-on); }
 :root[data-steps="match"] .big-title { color: var(--title); }
+/* Icon inside the step circle; the step number moves in front of the title ("1 · Prep"). */
+.bignum .step-icon, .bignum .step-icon svg { display: block; width: 24px; height: 24px; }
+.title-num { font-weight: 800; }
+.eg-opts .step-icon svg { width: 22px; height: 22px; margin: 0; color: var(--title); }
 .steps-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; font-weight: 700; }
 
 /* The 6 big steps */
@@ -296,6 +300,7 @@ li.big {
 @media (max-width: 560px) {
   .big-head { gap: 10px; padding: 14px 12px 14px 10px; }
   .bignum { width: 38px; height: 38px; font-size: 24px; }
+  .bignum .step-icon, .bignum .step-icon svg { width: 21px; height: 21px; }
   .simple-row { gap: 10px; padding: 14px 12px 14px 10px; }
   .big-title { font-size: 27px; }
   .big .timer-tag { display: none; }

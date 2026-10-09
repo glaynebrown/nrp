@@ -36,6 +36,23 @@
     pencil: svg('<path d="M4 20l1-5L16 4l4 4L9 19l-5 1z"/>'),
     clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
   };
+  // Icons that can sit before a big step's title (picked per step in Edit cards).
+  const STEP_ICONS = [
+    ['clipboard', 'Clipboard', '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><path d="M9 14l2 2 4-4"/>'],
+    ['stopwatch', 'Stopwatch', '<circle cx="12" cy="14" r="8"/><path d="M12 14v-4M10 2h4M12 2v4M19 7l1.5-1.5"/>'],
+    ['lungs', 'Lungs', '<path d="M12 4v8M12 12l-3-2M12 12l3-2"/><path d="M8.5 7.5C6 8 3 12 3 16.5 3 19 4.5 20 6 20c2 0 3-1 3-3V9"/><path d="M15.5 7.5C18 8 21 12 21 16.5 21 19 19.5 20 18 20c-2 0-3-1-3-3V9"/>'],
+    ['heart', 'Heart', '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0016.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4 3 5.5l7 7z"/><path d="M3.2 12H9l.5-1 2 4.5 2-7 1.5 3.5h5.3"/>'],
+    ['drop', 'Drop', '<path d="M12 22a7 7 0 007-7c0-2-1-3.9-3-5.5S12.5 5.5 12 2.5c-.5 3-2 4.9-4 6.5S5 13 5 15a7 7 0 007 7z"/>'],
+    ['chat', 'Speech bubbles', '<path d="M14 9a2 2 0 01-2 2H6l-4 4V4a2 2 0 012-2h8a2 2 0 012 2z"/><path d="M18 9h2a2 2 0 012 2v11l-4-4h-6a2 2 0 01-2-2v-1"/>'],
+    ['syringe', 'Syringe', '<path d="M18 2l4 4M20 4l-9.5 9.5M14 6l4 4M7 13l4 4M5.5 18.5L2 22M9.5 9.5l5 5-4.5 4.5a2.1 2.1 0 01-3 0l-2-2a2.1 2.1 0 010-3z"/>'],
+    ['pulse', 'Heartbeat line', '<path d="M3 12h4l2-5 4 10 2-5h6"/>'],
+    ['baby', 'Baby', '<path d="M9 12h.01M15 12h.01M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"/><path d="M19 6.3a9 9 0 011.8 3.9 2 2 0 010 3.6 9 9 0 01-17.6 0 2 2 0 010-3.6A9 9 0 0112 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1"/>'],
+    ['thermometer', 'Thermometer', '<path d="M14 4v10.54a4 4 0 11-4 0V4a2 2 0 014 0z"/>'],
+    ['alert', 'Warning', '<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/>'],
+    ['star', 'Star', '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>'],
+  ];
+  const stepIcon = k => { const i = STEP_ICONS.find(([id]) => id === k); return i ? `<span class="step-icon">${svg(i[2])}</span>` : ''; };
+  const hasIcon = k => STEP_ICONS.some(([id]) => id === k);
 
   /* ================= Colors ================= */
   // Colors you can change. Peach = values, lavender = actions, sage = titles; red is kept for danger only.
@@ -305,9 +322,9 @@
     return `
     <li class="big ph-${g.phase}${isOpen ? ' open' : ''}" data-id="${g.id}">
       <button class="big-head" aria-expanded="${isOpen}">
-        <span class="bignum">${i + 1}</span>
+        <span class="bignum">${hasIcon(g.icon) ? stepIcon(g.icon) : i + 1}</span>
         <span class="titles">
-          <span class="big-title">${esc(g.title)}</span>
+          <span class="big-title">${hasIcon(g.icon) ? `<span class="title-num">${i + 1} ·</span> ` : ''}${esc(g.title)}</span>
           <span class="subnames">${single ? esc(cards[0].summary) : cards.map((c, j) => `<span><i>${'abcdefghij'[j]}</i>${esc(c.title)}</span>`).join('')}</span>
         </span>
         ${g.timer ? `<span class="timer-tag">${icons.clock} ${esc(g.timer)}</span>` : ''}
@@ -392,8 +409,9 @@
             ${mv('group', g.id, i, NRP.groups.length)}
           </div>
           <div class="eg-opts">
+            ${g.simple ? '' : `<label>Icon <select data-k="groups" data-id="${g.id}" data-f="icon"><option value="">None</option>${STEP_ICONS.map(([k, n]) => `<option value="${k}" ${g.icon === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>${stepIcon(g.icon)}`}
             ${g.simple || theme.steps !== 'phase' ? '' : `<label>Color <select data-k="groups" data-id="${g.id}" data-f="phase">${STEP_COLORS.map(([k, n]) => `<option value="${k}" ${g.phase === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`}
-            ${isEdited('groups', g.id) ? `<button class="link" data-reset="groups:${g.id}">Reset title + color</button>` : ''}
+            ${isEdited('groups', g.id) ? `<button class="link" data-reset="groups:${g.id}">Reset</button>` : ''}
           </div>
           ${g.cards.map((id, j) => card(CARD[id], j, g)).join('')}
           <button class="btn ghost small add" data-addsub="${g.id}">+ Add substep</button>

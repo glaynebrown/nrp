@@ -22,11 +22,11 @@ const NRP = {
 
   // The 6 big steps. Each lists its substeps (cards below) in order.
   groups: [
-    { id: 'g-prep', phase: 'prep', title: 'Prep', cards: ['prep'] },
-    { id: 'g-golden', phase: 'first', title: 'Golden minute', timer: 'First 60 seconds', cards: ['rapid', 'initial', 'decision'] },
-    { id: 'g-ppv', phase: 'vent', title: 'PPV', cards: ['ppv', 'mrsopa'] },
-    { id: 'g-cpr', phase: 'cpr', title: 'CPR', cards: ['cpr', 'epi'] },
-    { id: 'g-vol', phase: 'meds', title: 'Hypovolemia or PTX?', cards: ['volume'] },
+    { id: 'g-prep', phase: 'prep', icon: 'clipboard', title: 'Prep', cards: ['prep'] },
+    { id: 'g-golden', phase: 'first', icon: 'stopwatch', title: 'Golden minute', timer: 'First 60 seconds', cards: ['rapid', 'initial', 'decision'] },
+    { id: 'g-ppv', phase: 'vent', icon: 'lungs', title: 'PPV', cards: ['ppv', 'mrsopa'] },
+    { id: 'g-cpr', phase: 'cpr', icon: 'heart', title: 'CPR', cards: ['cpr', 'epi'] },
+    { id: 'g-vol', phase: 'meds', icon: 'drop', title: 'Hypovolemia or PTX?', cards: ['volume'] },
     { id: 'g-debrief', phase: 'after', title: 'Debrief', cards: ['debrief'], simple: true },  // simple = just the number + one sentence
   ],
 
