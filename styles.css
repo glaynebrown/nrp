@@ -464,7 +464,15 @@ li.big {
 .fio2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
 .f-row { background: var(--soft); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .f-row span { font-weight: 700; color: var(--muted); font-size: 14px; }
-.f-row b { font-size: 26px; color: var(--lav-ink); }
+.f-row b { font-size: 26px; color: var(--lav-ink); white-space: nowrap; }
+.f-row span { white-space: nowrap; }
+@media (max-width: 560px) {
+  /* Phones: keep each FiO2 range on one line. */
+  .fio2 { gap: 6px; }
+  .f-row { padding: 10px 4px; }
+  .f-row b { font-size: clamp(17px, 5.4vw, 26px); }
+  .f-row span { font-size: 13px; }
+}
 .tips-list .line { font-size: 16px; line-height: 1.5; }
 .small-seg button { font-size: 13px; padding: 5px 10px; }
 .s-row { display: grid; grid-template-columns: 60px 1fr 80px; gap: 10px; align-items: center; font-weight: 700; }
