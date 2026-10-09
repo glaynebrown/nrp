@@ -474,6 +474,8 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
   .neo-row { flex-direction: column; gap: 10px; width: 100%; }
   .readout { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; width: 100%; gap: 8px; }
   .readout .pip-note { order: -1; width: 100%; text-align: center; padding: 0; margin: 0; }
+  .readout .set-peep { order: 0; } .readout .set-pip { order: 1; }  /* PEEP on the left, PIP on the right */
+  .readout .word { order: 2; }
   .readout .word { width: 100%; text-align: center; padding: 0; }
   .pp-cards { grid-template-columns: 1fr; }
   .neo-row { gap: 8px; }
