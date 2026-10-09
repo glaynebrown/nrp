@@ -186,7 +186,7 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .open > .card-body { grid-template-rows: 1fr; }
 .card-body > .inner { overflow: hidden; min-height: 0; }
 .big > .card-body > .inner { padding: 0 20px 0 74px; }
-.big.open > .card-body > .inner { padding-bottom: 18px; }
+.big.open > .card-body > .inner { padding-bottom: 12px; }
 
 /* Substeps (a, b, c) inside a big step */
 .subs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; position: relative; }
@@ -200,7 +200,7 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .sub .title { font: 23px/1.15 var(--hand); color: var(--head); }
 .summary { font-size: 14px; color: var(--muted); }
 .sub > .card-body > .inner { padding: 0 16px 0 54px; }
-.sub.open > .card-body > .inner { padding-bottom: 14px; }
+.sub.open > .card-body > .inner { padding-bottom: 10px; }
 .lines { list-style: none; margin: 0; padding: 0; }
 .line { position: relative; padding: 3px 0 3px 18px; font-size: 18px; line-height: 30px; }
 .line::before { content: '–'; position: absolute; left: 0; color: var(--muted); }
@@ -249,6 +249,11 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 
 /* Pencil at the bottom right of each card opens/closes that card's notes */
 .card-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+/* No extra button on the card: the pencil tucks up beside the last line instead of
+   taking its own row (the text keeps clear of it). */
+.card-foot:not(:has(a)) { margin-top: -38px; pointer-events: none; }
+.card-foot:not(:has(a)) .pencil-btn { pointer-events: auto; }
+.inner:has(> .card-foot:not(:has(a))) > :is(.lines, .reveal, .verify-btn, .verify-text):nth-last-child(3) { padding-right: 48px; }
 .pencil-btn {
   margin-left: auto; flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
   border: 1.5px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; transition: background .15s, color .15s;
