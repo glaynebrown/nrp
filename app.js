@@ -246,14 +246,15 @@
         <div class="seg big" role="tablist">
           ${[['ref', 'Reference'], ['notes', 'Notes'], ['study', 'Study'], ['run', 'Run it']].map(([k, l]) => `<button data-mode="${k}" class="${flowMode === k ? 'on' : ''}">${l}</button>`).join('')}
         </div>
-        <p class="mode-hint${flowMode === 'ref' ? ' empty-hint' : ''}">${{
+        <p class="mode-hint${flowMode === 'ref' ? ' empty-hint' : ''}" data-fit>${{
           ref: '',
-          notes: 'All your notes in one place. Tap one to open it, tap again to close.',
-          study: 'Each point is hidden. Say it out loud, then tap to check.',
-          run: 'Scenario: the app plays the baby. Free run: you tap what the baby is doing.',
+          notes: 'Tap a note to open or close it.',
+          study: 'Test your knowledge, then tap to reveal.',
+          run: 'Practice with built-in scenarios or free run.',
         }[flowMode]}</p>
       </div>
       <div id="flowBody"></div>`;
+    fitTitles($('.flow-top'));
     $$('[data-mode]').forEach(b => b.onclick = () => { editMode = false; flowMode = b.dataset.mode; local.set('flowMode', flowMode); renderFlow(); });
     if (flowMode === 'run') return renderRunArea($('#flowBody'));
     if (flowMode === 'notes') return renderNotesMode($('#flowBody'));

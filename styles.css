@@ -146,7 +146,7 @@ table.mini.ett th { font-size: 12px; }
 
 /* ---------- Algorithm ---------- */
 .flow-top { text-align: center; margin-bottom: 10px; }
-.mode-hint { color: var(--muted); margin: 10px 0 0; }
+.mode-hint { color: var(--muted); margin: 10px 0 0; white-space: nowrap; overflow: hidden; }
 .flow-tools { display: flex; justify-content: flex-end; gap: 8px; align-items: center; margin-bottom: 10px; }
 .flow-tools.ref-tools { justify-content: space-between; padding: 0 4px; }
 .mode-hint.empty-hint { display: none; }
