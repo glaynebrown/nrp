@@ -87,7 +87,7 @@ h3 { font-size: 18px; }
 
 /* ---------- Building blocks ---------- */
 .pill {
-  display: inline-block; color: var(--text); font: 800 21px/1.2 var(--hand);
+  display: inline-block; color: var(--title); font: 800 21px/1.2 var(--hand);
 }
 mark.pe, mark.lv { color: inherit; padding: 0 6px; border-radius: 8px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 mark.pe { background: var(--peach); }
@@ -165,6 +165,11 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .ph-vent { --ph: var(--st-vent); --ph-on: var(--st-vent-on); } .ph-cpr { --ph: var(--st-cpr); --ph-on: var(--st-cpr-on); }
 .ph-meds { --ph: var(--st-meds); --ph-on: var(--st-meds-on); } .ph-after { --ph: var(--st-after); --ph-on: var(--st-after-on); }
 
+/* Step colors "Matching": every step uses the sage title color (Settings → Colors). */
+:root[data-steps="match"] :is(.ph-prep, .ph-first, .ph-vent, .ph-cpr, .ph-meds, .ph-after) { --ph: var(--title); --ph-on: var(--title-on); }
+:root[data-steps="match"] .big-title { color: var(--title); }
+.steps-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; font-weight: 700; }
+
 /* The 6 big steps */
 li.big {
   background: var(--card); border-radius: 22px; box-shadow: var(--shadow);
@@ -225,6 +230,7 @@ li.big {
 
 /* Edit cards */
 .edit-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--lav); border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; }
+.edit-note { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: clamp(14px, 4.4vw, 16px); }
 .fmt-bar { position: sticky; top: 70px; z-index: 10; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 6px 10px; box-shadow: var(--shadow); margin-bottom: 14px; font-size: 14px; }
 .fmt-bar span { color: var(--muted); font-weight: 700; margin-right: 4px; }
 .fmt-bar button { border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-weight: 700; }

@@ -38,19 +38,20 @@
   };
 
   /* ================= Colors ================= */
-  // Six colors you can change. Peach = values, lavender = actions; red is kept for danger only.
+  // Colors you can change. Peach = values, lavender = actions, sage = titles; red is kept for danger only.
   const TOKENS = [
     ['bg', 'Page'], ['card', 'Cards'], ['text', 'Text'],
-    ['accent', 'Buttons'], ['peach', 'Peach (values)'], ['lav', 'Lavender (actions)'],
+    ['accent', 'Buttons'], ['peach', 'Peach (values)'], ['lav', 'Lavender (actions)'], ['title', 'Sage (titles)'],
     ['st-prep', 'Step color · Blue'], ['st-first', 'Step color · Gold'], ['st-vent', 'Step color · Teal'],
     ['st-cpr', 'Step color · Berry'], ['st-meds', 'Step color · Plum'], ['st-after', 'Step color · Sage'],
   ];
-  // Each big step has its own color (set per step in Edit cards; these are the defaults).
+  // Step colors: 'match' = every step uses the sage title color; 'phase' = each big step has its own
+  // color (set per step in Edit cards; these are the defaults).
   const STEP_COLORS = [['prep', 'Blue'], ['first', 'Gold'], ['vent', 'Teal'], ['cpr', 'Berry'], ['meds', 'Plum'], ['after', 'Sage']];
   const LOOKS = {
-    light: { name: 'Light', bg: '#faf6f3', card: '#ffffff', text: '#1f4f66', accent: '#1f4f66', peach: '#f9dcc3', lav: '#e8dbf7',
+    light: { name: 'Light', bg: '#faf6f3', card: '#ffffff', text: '#1f4f66', accent: '#1f4f66', peach: '#f9dcc3', lav: '#e8dbf7', title: '#4f7d5c',
       'st-prep': '#5b7fa6', 'st-first': '#c39a3a', 'st-vent': '#3f8f8a', 'st-cpr': '#a3486b', 'st-meds': '#7a5a9e', 'st-after': '#6f9a72' },
-    night: { name: 'Night', bg: '#1c1a22', card: '#27242f', text: '#d6e6ef', accent: '#93c6dd', peach: '#5b4231', lav: '#423658',
+    night: { name: 'Night', bg: '#1c1a22', card: '#27242f', text: '#d6e6ef', accent: '#93c6dd', peach: '#5b4231', lav: '#423658', title: '#9cc9a3',
       'st-prep': '#8fb0d4', 'st-first': '#e0bd66', 'st-vent': '#6cc0b9', 'st-cpr': '#d77fa0', 'st-meds': '#b294d6', 'st-after': '#9cc79f' },
   };
   // Fonts: [name, Google Fonts family param (null = no download), CSS fallback]
@@ -85,6 +86,7 @@
     t.custom ||= {}; if (t.custom.notes) { t.custom.light = t.custom.notes; delete t.custom.notes; }
     t.fonts ||= { hand: 'Same as text', body: 'Nunito' };
     if (!t.v2) { t.fonts.hand = 'Same as text'; t.v2 = true; }
+    t.steps ||= 'match';
     return t;
   }
   upgradeTheme(theme);
@@ -116,6 +118,8 @@
     root.setProperty('--danger', dark ? '#e0777d' : '#b4434b');
     // Number color on each step circle: white on darker colors, navy on lighter ones.
     STEP_COLORS.forEach(([k]) => root.setProperty(`--st-${k}-on`, lum(c['st-' + k]) > 0.33 ? '#1b2a33' : '#ffffff'));
+    root.setProperty('--title-on', lum(c.title) > 0.33 ? '#1b2a33' : '#ffffff');
+    document.documentElement.dataset.steps = theme.steps;
     // Pencil colors in notes
     root.setProperty('--ink-ink', c.text); root.setProperty('--ink-rose', dark ? '#e3a3a8' : '#cf7f86'); root.setProperty('--ink-maroon', dark ? '#f0b8b8' : '#7a1f22');
     root.setProperty('--ink-lav', lavInk); root.setProperty('--ink-peach', peachInk);
@@ -388,7 +392,7 @@
             ${mv('group', g.id, i, NRP.groups.length)}
           </div>
           <div class="eg-opts">
-            ${g.simple ? '' : `<label>Color <select data-k="groups" data-id="${g.id}" data-f="phase">${STEP_COLORS.map(([k, n]) => `<option value="${k}" ${g.phase === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`}
+            ${g.simple || theme.steps !== 'phase' ? '' : `<label>Color <select data-k="groups" data-id="${g.id}" data-f="phase">${STEP_COLORS.map(([k, n]) => `<option value="${k}" ${g.phase === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`}
             ${isEdited('groups', g.id) ? `<button class="link" data-reset="groups:${g.id}">Reset title + color</button>` : ''}
           </div>
           ${g.cards.map((id, j) => card(CARD[id], j, g)).join('')}
@@ -1285,7 +1289,8 @@
       <section class="panel">
         <h2><span class="pill">Colors</span></h2>
         <div class="looks">${Object.entries(LOOKS).map(([k, l]) => `<button class="look${theme.look === k ? ' on' : ''}" data-look="${k}" style="--a:${l.bg};--b:${l.peach};--c:${l.lav};--d:${l.text}"><span class="sw4"><i></i><i></i><i></i><i></i></span>${esc(l.name)}</button>`).join('')}</div>
-        <div class="tokens">${TOKENS.map(([k, label]) => `<label class="tok"><input type="color" value="${c[k]}" data-tok="${k}"><span>${esc(tokenLabel(k, label))}</span>${theme.custom[theme.look]?.[k] ? `<button class="link" data-reset="${k}">reset</button>` : ''}</label>`).join('')}</div>
+        <div class="steps-row"><span>Step colors</span><div class="seg">${[['match', 'Matching (sage)'], ['phase', 'By phase']].map(([k, l]) => `<button data-steps="${k}" class="${theme.steps === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+        <div class="tokens">${TOKENS.filter(([k]) => theme.steps === 'phase' || !k.startsWith('st-')).map(([k, label]) => `<label class="tok"><input type="color" value="${c[k]}" data-tok="${k}"><span>${esc(tokenLabel(k, label))}</span>${theme.custom[theme.look]?.[k] ? `<button class="link" data-reset="${k}">reset</button>` : ''}</label>`).join('')}</div>
         <button class="btn ghost small" data-resetall ${Object.keys(theme.custom[theme.look] || {}).length ? '' : 'disabled'}>Reset “${esc(LOOKS[theme.look].name)}” colors</button>
       </section>
       <section class="panel">
@@ -1307,6 +1312,7 @@
     wireSignIn(view);
     const out = $('[data-out]'); if (out) out.onclick = () => Store.signOut();
     $$('[data-look]').forEach(b => b.onclick = () => { theme.look = b.dataset.look; saveTheme(); renderSettings(); });
+    $$('button[data-steps]').forEach(b => b.onclick = () => { theme.steps = b.dataset.steps; saveTheme(); renderSettings(); });
     loadFonts([...HAND_FONTS, ...BODY_FONTS].map(f => f[1]));  // so each choice previews in its own font
     $$('[data-hand]').forEach(b => b.onclick = () => { theme.fonts.hand = b.dataset.hand; saveTheme(); renderSettings(); });
     $$('[data-body]').forEach(b => b.onclick = () => { theme.fonts.body = b.dataset.body; saveTheme(); renderSettings(); });
