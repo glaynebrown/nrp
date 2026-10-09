@@ -421,8 +421,22 @@ li.big {
 .grade-list .ok .gi { background: var(--title); color: var(--title-on); }
 .grade-list .no .gi { background: var(--peach); color: var(--peach-ink); }
 .grade-list small { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+/* Recall: type what you do */
+.monitor.compact { grid-template-columns: repeat(4, 1fr); padding: 8px 12px; }
+.monitor.compact .mon b { font-size: 20px; }
+.chat { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; padding: 4px 2px; }
+.msg { max-width: 85%; padding: 8px 12px; border-radius: 16px; font-size: 16px; line-height: 1.4; background: var(--card); border: 1px solid var(--line); align-self: flex-start; }
+.msg small { display: block; font-size: 11px; font-weight: 800; color: var(--muted); }
+.msg small:empty { display: none; }
+.msg.you { align-self: flex-end; background: var(--text); color: var(--card); border-color: var(--text); }
+.msg.rem { background: var(--peach); border-color: transparent; font-weight: 700; }
+.msg.hint { background: var(--lav); border-color: transparent; font-size: 14px; }
+.ask-form { display: flex; gap: 8px; position: sticky; bottom: 70px; background: var(--bg); padding: 6px 0; }
+.ask-form input { flex: 1; min-width: 0; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 14px; font-size: 16px; background: var(--card); color: var(--text); }
+.recall .end { align-self: center; }
 @media (max-width: 560px) {
   .monitor { grid-template-columns: repeat(2, 1fr); }
+  .monitor.compact { grid-template-columns: repeat(4, 1fr); }
   .run-clock { gap: 8px; }
   .run-clock > div { padding: 6px 12px; }
 }
