@@ -405,6 +405,7 @@ li.big {
 .answer { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .answer input { width: 150px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 14px; font-size: 22px; font-weight: 800; background: var(--card); }
 .answer span { font-weight: 800; font-size: 18px; }
+.answer input::placeholder { font-size: 16px; font-weight: 500; color: var(--muted); opacity: 1; }
 .choices { display: flex; gap: 8px; flex-wrap: wrap; }
 .choice.right { background: color-mix(in srgb, #4caf7a 25%, var(--card)); border-color: #4caf7a; opacity: 1; }
 .choice.wrong { background: color-mix(in srgb, var(--ph-cpr) 25%, var(--card)); border-color: var(--ph-cpr); opacity: 1; }
