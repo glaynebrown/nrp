@@ -1111,21 +1111,39 @@
     sq.onpointerup = rel; sq.onpointerleave = rel; sq.onpointercancel = rel;
   }
 
+  /* Sound for beeps and clicks. iPhone/iPad only allow sound that starts from a tap,
+     and the side silent switch mutes web sounds unless they're marked as media
+     ("playback") -- so unlock() runs on a tap and sets that. */
+  const sound = (() => {
+    let ac = null;
+    function unlock() {
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+      ac ||= new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state !== 'running') ac.resume();
+      // A silent blip during the tap is what actually opens up sound on iOS.
+      const blip = ac.createBufferSource(); blip.buffer = ac.createBuffer(1, 1, 22050); blip.connect(ac.destination); blip.start(0);
+    }
+    function beep(freq, len = 0.12, vol = 0.4) {
+      if (!ac) return;
+      if (ac.state !== 'running') ac.resume();  // iOS pauses sound when the app was in the background
+      const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+      o.frequency.value = freq; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+      o.connect(g).connect(ac.destination); o.start(t); o.stop(t + len + 0.01);
+    }
+    return { unlock, beep };
+  })();
+
   function beatTrainer() {
-    const el = $('[data-beat]'), btn = $('[data-beatbtn]');
-    let on = false, timer = null, i = 0, ac = null;
-    const click = hi => {
-      if (!$('[data-sound]').checked) return;
-      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-      const o = ac.createOscillator(), g = ac.createGain();
-      o.frequency.value = hi ? 660 : 990; g.gain.setValueAtTime(0.25, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.12);
-      o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.13);
-    };
+    const el = $('[data-beat]'), btn = $('[data-beatbtn]'), box = $('[data-sound]');
+    let on = false, timer = null, i = 0;
+    const click = hi => { if (box.checked) sound.beep(hi ? 660 : 990); };
+    box.onchange = () => { if (box.checked) sound.unlock(); };
     const step = () => {
       $$('span', el).forEach((s, j) => s.classList.toggle('now', j === i));
       click(i === 3); i = (i + 1) % 4;
     };
     btn.onclick = () => {
+      if (box.checked) sound.unlock();
       on = !on; btn.textContent = on ? 'Stop' : 'Start'; el.classList.toggle('paused', !on);
       clearInterval(timer); if (on) { i = 0; step(); timer = setInterval(step, 500); } else $$('span', el).forEach(s => s.classList.remove('now'));
     };
