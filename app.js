@@ -1833,13 +1833,23 @@
 
   // One time: the weight estimates + risk-factor examples moved off the Prep card
   // and into your own Prep notes, so you can change them however you like.
-  const PREP_NOTE = 'Estimated weight\n28 wks ≈ 1 kg\n32 wks ≈ 2 kg\n37 wks ≈ 3 kg\n\nRisk factors, e.g.: prolapsed cord · maternal HTN · fetal anemia · Cat II FHR';
+  const PREP_NOTE = 'Estimated weight\n28 wks ≈ 1 kg\n32 wks ≈ 1.3 kg\n37 wks ≈ 2.2 kg\n40 wks ≈ 2.8 kg\n\nRisk factors, e.g.: prolapsed cord · maternal HTN · fetal anemia · Cat II FHR';
   async function seedPrepNote(prefs) {
     if (Store.configured ? (prefs && prefs.seededPrep) : local.get('seededPrep', false)) return;
     const existing = await new Promise(res => { const un = Store.watchNotes(list => { setTimeout(() => un && un()); res(list.find(n => n.cardId === 'prep')); }); });
     if (existing) await Store.saveNote({ ...existing, text: (existing.text ? existing.text + '\n\n' : '') + PREP_NOTE });
     else await Store.saveNote({ title: 'Prep', text: PREP_NOTE, cardId: 'prep', strokes: [], h: 900 });
     Store.configured ? Store.savePrefs({ seededPrep: true }) : local.set('seededPrep', true);
+  }
+
+  // One time (Oct 2026): the weights in your Prep note → 9th edition (middle of each range).
+  // Only swaps the exact old lines, so anything you've rewritten yourself is left alone.
+  const OLD_W = '32 wks ≈ 2 kg\n37 wks ≈ 3 kg', NEW_W = '32 wks ≈ 1.3 kg\n37 wks ≈ 2.2 kg\n40 wks ≈ 2.8 kg';
+  async function updatePrepWeights(prefs) {
+    if (Store.configured ? (prefs && prefs.prepWeights9) : local.get('prepWeights9', false)) return;
+    const n = await new Promise(res => { const un = Store.watchNotes(list => { setTimeout(() => un && un()); res(list.find(x => x.cardId === 'prep')); }); });
+    if (n && n.text && n.text.includes(OLD_W)) await Store.saveNote({ ...n, text: n.text.replace(OLD_W, NEW_W) });
+    Store.configured ? Store.savePrefs({ prepWeights9: true }) : local.set('prepWeights9', true);
   }
 
   /* ================= Little dialog ================= */
@@ -1862,10 +1872,10 @@
       if (p && p.theme) { const had = p.theme.v2; Object.assign(theme, p.theme); upgradeTheme(theme); saveTheme(!had); }
       if (p && p.edits) { edits = p.edits; applyEdits(); local.set('edits', edits); }
       else if (Object.keys(edits.cards).length + Object.keys(edits.groups).length + Object.keys(edits.meds).length || edits.layout) saveEdits();
-      seedPrepNote(p);
+      seedPrepNote(p).then(() => updatePrepWeights(p));
     }
     render();
-    if (u && u.sample) seedPrepNote(null);
+    if (u && u.sample) seedPrepNote(null).then(() => updatePrepWeights(null));
   });
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');

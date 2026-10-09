@@ -271,9 +271,10 @@ li.big {
 .card-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 /* No extra button on the card: the pencil tucks up beside the last line instead of
    taking its own row (the text keeps clear of it). */
-.card-foot:not(:has(a)) { margin-top: -38px; pointer-events: none; }
-.card-foot:not(:has(a)) .pencil-btn { pointer-events: auto; }
-.inner:has(> .card-foot:not(:has(a))) > :is(.lines, .reveal, .verify-btn, .verify-text):nth-last-child(3) { padding-right: 48px; }
+.card-foot:has(.pencil-btn):not(:has(a)) { margin-top: -38px; pointer-events: none; }
+.card-foot:not(:has(*)) { display: none; }  /* Study: no pencil, no link */
+.card-foot:has(.pencil-btn):not(:has(a)) .pencil-btn { pointer-events: auto; }
+.inner:has(> .card-foot:has(.pencil-btn):not(:has(a))) > :is(.lines, .reveal, .verify-btn, .verify-text):nth-last-child(3) { padding-right: 48px; }
 .pencil-btn {
   margin-left: auto; flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
   border: 1.5px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; transition: background .15s, color .15s;
@@ -283,7 +284,7 @@ li.big {
 .pencil-btn.on { background: var(--lav-ink); border-color: var(--lav-ink); color: #fff; }
 .notes-area:not([hidden]) { margin-top: 10px; background: var(--lav); border-radius: 16px; padding: 10px; }
 .notes-area .ink-bar { top: 70px; }
-.np-text { white-space: pre-wrap; font-size: 16px; margin: 0; max-height: 9.5em; overflow: hidden; }
+.np-text { white-space: pre-wrap; font-size: 16px; margin: 0; }
 
 /* Notes view */
 .nsec { font: 800 18px var(--hand); color: var(--text); margin: 20px 0 8px; }
