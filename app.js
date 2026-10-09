@@ -124,7 +124,9 @@
     $('meta[name=theme-color]').content = c.bg;
     applyFonts();
   }
+  let colorTimer;
   function saveTheme(sync = true) {
+    clearTimeout(colorTimer);
     local.set('theme', theme); applyColors();
     if (sync) Store.savePrefs({ theme: JSON.parse(JSON.stringify(theme)) }).catch(() => {});
   }
@@ -1308,11 +1310,19 @@
     loadFonts([...HAND_FONTS, ...BODY_FONTS].map(f => f[1]));  // so each choice previews in its own font
     $$('[data-hand]').forEach(b => b.onclick = () => { theme.fonts.hand = b.dataset.hand; saveTheme(); renderSettings(); });
     $$('[data-body]').forEach(b => b.onclick = () => { theme.fonts.body = b.dataset.body; saveTheme(); renderSettings(); });
+    // Colors: preview live while the picker is open; save once you stop. No re-render here --
+    // rebuilding the page would close the iPhone/iPad color picker mid-drag.
+    const resetTok = e => { e.preventDefault(); delete theme.custom[theme.look][e.currentTarget.dataset.reset]; saveTheme(); renderSettings(); };
     $$('[data-tok]').forEach(i => {
-      i.oninput = () => { (theme.custom[theme.look] ||= {})[i.dataset.tok] = i.value; local.set('theme', theme); applyColors(); };
-      i.onchange = () => { saveTheme(); renderSettings(); };
+      const pick = () => {
+        (theme.custom[theme.look] ||= {})[i.dataset.tok] = i.value; local.set('theme', theme); applyColors();
+        clearTimeout(colorTimer); colorTimer = setTimeout(() => saveTheme(), 1000);
+        const tok = i.closest('.tok');
+        if (!$('[data-reset]', tok)) tok.insertAdjacentHTML('beforeend', `<button class="link" data-reset="${i.dataset.tok}">reset</button>`), $('[data-reset]', tok).onclick = resetTok;
+      };
+      i.oninput = pick; i.onchange = pick;
     });
-    $$('[data-reset]').forEach(b => b.onclick = e => { e.preventDefault(); delete theme.custom[theme.look][b.dataset.reset]; saveTheme(); renderSettings(); });
+    $$('[data-reset]').forEach(b => b.onclick = resetTok);
     $('[data-resetall]').onclick = () => { theme.custom[theme.look] = {}; saveTheme(); renderSettings(); };
     $('[data-export]').onclick = () => {
       const blob = new Blob([JSON.stringify({ app: 'NRP', exported: new Date().toISOString(), notes }, null, 1)], { type: 'application/json' });
