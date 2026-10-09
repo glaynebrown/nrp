@@ -358,7 +358,7 @@ li.big {
 .doses { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
 .dose { flex: 1 1 140px; background: var(--lav); border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; }
 .dose span { font-size: 13px; font-weight: 800; color: var(--muted); }
-.dose b { font-size: 30px; color: var(--text); }
+.dose b { font-size: 26px; color: var(--text); line-height: 1.2; }
 .dose small { font-weight: 700; }
 .beat { display: flex; gap: 8px; margin: 6px 0 10px; }
 .beat span { flex: 1; text-align: center; padding: 10px 4px; border-radius: 12px; background: var(--soft); font-weight: 800; font-size: 20px; animation: beat 2s infinite; }
@@ -405,6 +405,8 @@ li.big {
 .calc-top .rate { font-size: 13px; font-weight: 800; background: var(--peach); padding: 1px 10px; border-radius: 99px; white-space: nowrap; }
 .big-num { font-size: 44px; font-weight: 800; line-height: 1.1; margin-top: 4px; }
 .big-num small { font-size: 20px; }
+.big-num.two { display: flex; flex-direction: column; font-size: 34px; }
+.big-num.two small { font-size: 17px; }
 .mg { color: var(--lav-ink); font-weight: 800; }
 .syringe { width: 100%; height: auto; margin: 6px 0 0; }
 .syringe .barrel { fill: var(--card); stroke: var(--text); stroke-width: 2; }
@@ -416,11 +418,16 @@ li.big {
 .syringe .cap { font-size: 10px; fill: var(--muted); font-weight: 700; }
 .math { background: var(--card); border-radius: 12px; padding: 8px 12px; margin-top: 6px; font-size: 16px; display: grid; gap: 2px; }
 .drill-top { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
-.drill-top .toggle { margin-left: auto; font-size: 14px; }
 .question .q { font-size: 21px; font-weight: 600; }
 .answer { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .answer input { width: 150px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 14px; font-size: 22px; font-weight: 800; background: var(--card); }
 .answer span { font-weight: 800; font-size: 18px; }
+/* "The dose is [ ] mg, which is [ ] mL." */
+.answer.say { display: grid; grid-template-columns: auto 120px auto; gap: 10px 10px; align-items: center; justify-content: start; }
+.answer.say input { width: 100%; }
+.answer.say .btn { grid-column: 1 / -1; justify-self: start; }
+.say-lead { font-weight: 700; font-size: 17px; }
+.answer input.right { border-color: #3f8f5a; } .answer input.wrong { border-color: var(--danger); }
 .answer input::placeholder { font-size: 16px; font-weight: 500; color: var(--muted); opacity: 1; }
 .choices { display: flex; gap: 8px; flex-wrap: wrap; }
 .choice.right { background: color-mix(in srgb, #4caf7a 25%, var(--card)); border-color: #4caf7a; opacity: 1; }

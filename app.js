@@ -16,6 +16,7 @@
   };
   const round2 = n => Math.round(n * 100) / 100;
   const fmt = n => { const r = round2(n); return r % 1 === 0 ? String(r) : r.toFixed(2).replace(/0$/, ''); };
+  const fmtMg = n => String(Math.round(n * 1000) / 1000);  // mg needs 3 decimals (0.048 mg)
   const mmss = s => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   function toast(msg) {
     const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -605,6 +606,7 @@
   function logIt(text) { run.log.push([run.start ? Math.round(since(run.start)) : 0, text]); }
   function go(step, text) { if (text) logIt(text); run.step = step; run.stepAt = now(); run.checks = []; saveRun(); renderRun($('#flowBody')); }
   const dose = id => { const m = NRP.meds.find(x => x.id === id); return round2(run.weight * m.mlPerKg); };
+  const epiSay = id => { const m = NRP.meds.find(x => x.id === id), ml = dose(id); return [fmtMg(ml * m.mgPerMl), fmt(ml)]; };  // [mg, mL]
   const spo2Now = () => {
     if (!run.start) return null;
     const min = since(run.start) / 60;
@@ -684,13 +686,13 @@
       title: 'Epinephrine 1:10,000', phase: 'cpr',
       body: `${weightPicker()}
         <div class="doses">
-          <div class="dose"><span>IV / IO</span><b>${fmt(dose('epiIV'))} mL</b><small>${fmt(dose('epiIV') * 0.1)} mg · then flush 3 mL NS</small></div>
-          <div class="dose"><span>ET (no line yet)</span><b>${fmt(dose('epiET'))} mL</b><small>${fmt(dose('epiET') * 0.1)} mg</small></div>
+          <div class="dose"><span>IV / IO</span><b>${epiSay('epiIV')[0]} mg</b><b>= ${epiSay('epiIV')[1]} mL</b><small>then flush 3 mL NS</small></div>
+          <div class="dose"><span>ET (no line yet)</span><b>${epiSay('epiET')[0]} mg</b><b>= ${epiSay('epiET')[1]} mL</b></div>
         </div>
         ${run.epiAt ? `<p class="small">Last epi <b data-since="${run.epiAt}">${mmss(since(run.epiAt))}</b> ago. Repeat q 3–5 min.</p>` : ''}`,
       actions: [
-        ['Gave IV/IO epi + flush', () => { run.epiAt = now(); run.epiCount++; go('cpr2', `Epi IV/IO ${fmt(dose('epiIV'))} mL + 3 mL NS flush (dose ${run.epiCount})`); }, 'primary'],
-        ['Gave ET epi', () => { run.epiAt = now(); run.epiCount++; go('cpr2', `Epi ET ${fmt(dose('epiET'))} mL (dose ${run.epiCount})`); }, ''],
+        ['Gave IV/IO epi + flush', () => { run.epiAt = now(); run.epiCount++; go('cpr2', `Epi IV/IO ${epiSay('epiIV')[0]} mg (${epiSay('epiIV')[1]} mL) + 3 mL NS flush (dose ${run.epiCount})`); }, 'primary'],
+        ['Gave ET epi', () => { run.epiAt = now(); run.epiCount++; go('cpr2', `Epi ET ${epiSay('epiET')[0]} mg (${epiSay('epiET')[1]} mL) (dose ${run.epiCount})`); }, ''],
       ],
     }),
     cpr2: () => ({
@@ -814,7 +816,7 @@
   let explainStep = 0;
   let calcW = local.get('calcW', 3);
   const showMath = new Set();
-  const drill = { q: null, right: 0, total: 0, streak: 0, best: local.get('best', 0), hard: local.get('hard', false) };
+  const drill = { q: null, right: 0, total: 0, streak: 0, best: local.get('best', 0) };
 
   function renderMeds() {
     view.innerHTML = `
@@ -888,14 +890,15 @@
         const ml = calcW * m.mlPerKg, open = showMath.has(m.id);
         return `<div class="calc-card">
           <div class="calc-top"><span class="med">${esc(m.name)}</span><span class="rate">${m.mlPerKg} mL/kg</span></div>
-          <div class="big-num">${fmt(ml)} <small>mL</small></div>
-          ${m.mgPerMl ? `<div class="mg">= ${fmt(ml * m.mgPerMl)} mg</div>` : '<div class="mg">&nbsp;</div>'}
+          ${m.mgPerMl ? `<div class="big-num two"><span>${fmtMg(ml * m.mgPerMl)} <small>mg</small></span><span>= ${fmt(ml)} <small>mL</small></span></div>`
+          : `<div class="big-num">${fmt(ml)} <small>mL</small></div>`}
           ${syringe(ml)}
           <p class="small">${esc(m.note)}</p>
           <button class="link" data-math="${m.id}">${open ? 'Hide' : 'Show'} the math</button>
           ${open ? `<div class="math">
             <div>${fmt(calcW)} kg × ${m.mlPerKg} mL/kg = <b>${fmt(ml)} mL</b></div>
-            ${m.mgPerMl ? `<div>${fmt(ml)} mL × 0.1 mg/mL = <b>${fmt(ml * m.mgPerMl)} mg</b></div>` : ''}
+            ${m.mgPerMl ? `<div>${fmt(ml)} mL × ${m.mgPerMl} mg/mL = <b>${fmtMg(ml * m.mgPerMl)} mg</b></div>
+            <div class="small">Shortcut: ${Math.round(m.mlPerKg * m.mgPerMl * 1000) / 1000} mg/kg × ${fmt(calcW)} kg = ${fmtMg(ml * m.mgPerMl)} mg</div>` : ''}
           </div>` : ''}
         </div>`;
       }).join('')}</div>
@@ -912,21 +915,23 @@
   // ---- Drills ----
   const pick = a => a[Math.floor(Math.random() * a.length)];
   function makeQ() {
-    const kind = pick(['dose', 'dose', 'dose', 'gest', drill.hard ? 'mg' : 'dose', 'concept']);
+    const kind = pick(['dose', 'dose', 'dose', 'dose', 'gest', 'concept']);
     const med = pick(NRP.meds);
     if (kind === 'concept') return pick(CONCEPTS)();
     let w = round2(0.5 + Math.round(Math.random() * 40) / 10);
     let lead = `A **${fmt(w)} kg** baby`;
     if (kind === 'gest') { const r = pick(NRP.weights); w = r[1]; lead = `A **${r[0]}** baby (estimate the weight)`; }
     const ml = round2(w * med.mlPerKg);
-    if (kind === 'mg' && med.mgPerMl) {
-      const mg = round2(ml * med.mgPerMl);
-      return { text: `${lead} gets **${med.name}** (1:10,000). How many **mg** is the dose?`, answer: mg, unit: 'mg',
-        work: [`${fmt(w)} kg × ${med.mlPerKg} mL/kg = ${fmt(ml)} mL`, `${fmt(ml)} mL × 0.1 mg/mL = **${fmt(mg)} mg**`] };
+    const est = kind === 'gest' ? `Estimate: ${lead.replace(/\*\*/g, '').replace('A ', '').replace(' baby (estimate the weight)', '')} ≈ ${fmt(w)} kg` : null;
+    // Answered the way it's said in a code: "The dose is __ mg, which is __ mL."
+    if (med.mgPerMl) {
+      const mg = Math.round(ml * med.mgPerMl * 1000) / 1000, mgPerKg = Math.round(med.mlPerKg * med.mgPerMl * 1000) / 1000;
+      return { text: `${lead} needs **${med.name}** (1:10,000).`, parts: [['mg', mg], ['mL', ml]],
+        work: [est, `${fmt(w)} kg × ${med.mlPerKg} mL/kg = **${fmt(ml)} mL**`, `${fmt(ml)} mL × ${med.mgPerMl} mg/mL = **${fmtMg(mg)} mg**`,
+          `Shortcut: ${mgPerKg} mg/kg × ${fmt(w)} kg = ${fmtMg(mg)} mg`].filter(Boolean) };
     }
-    return { text: `${lead} needs **${med.name}**${med.mgPerMl ? ' (1:10,000)' : ''}. How many **mL**?`, answer: ml, unit: 'mL',
-      work: [kind === 'gest' ? `Estimate: ${lead.replace(/\*\*/g, '').replace('A ', '').replace(' baby (estimate the weight)', '')} ≈ ${fmt(w)} kg` : null,
-        `${med.mlPerKg} mL/kg means multiply by weight`, `${fmt(w)} × ${med.mlPerKg} = **${fmt(ml)} mL**`].filter(Boolean) };
+    return { text: `${lead} needs **${med.name}**.`, parts: [['mL', ml]],
+      work: [est, `${med.mlPerKg} mL/kg means multiply by weight`, `${fmt(w)} × ${med.mlPerKg} = **${fmt(ml)} mL**`].filter(Boolean) };
   }
   const CONCEPTS = [
     () => ({ text: '1 mL of **1:10,000** epi contains how many mg?', choices: ['0.01 mg', '0.1 mg', '1 mg', '10 mg'], answer: '0.1 mg',
@@ -955,15 +960,18 @@
       <div class="drill-top">
         <span class="pill-count">${drill.right} / ${drill.total} right</span>
         <span class="pill-count">Streak ${drill.streak} · Best ${drill.best}</span>
-        <label class="toggle"><input type="checkbox" data-hard ${drill.hard ? 'checked' : ''}> Ask for mg too</label>
       </div>
       <div class="question">
         <p class="q">${md(q.text)}</p>
         ${q.choices ? `<div class="choices">${q.choices.map(c => `<button class="btn ghost choice${q.done ? (c === q.answer ? ' right' : c === q.given ? ' wrong' : '') : ''}" data-choice="${esc(c)}" ${q.done ? 'disabled' : ''}>${esc(c)}</button>`).join('')}</div>`
-        : `<form class="answer" data-form><input type="text" inputmode="decimal" autocomplete="off" placeholder="Your answer" value="${esc(q.given ?? '')}" ${q.done ? 'disabled' : ''} data-ans><span>${q.unit}</span>
+        : `<form class="answer say" data-form>
+            ${q.parts.map(([unit], j) => `<span class="say-lead">${j ? 'which is' : 'The dose is'}</span>
+              <input type="text" inputmode="decimal" autocomplete="off" placeholder="${unit}" value="${esc(q.given?.[j] ?? '')}" ${q.done ? 'disabled' : ''} data-ans
+                class="${q.done ? (q.partOk[j] ? 'right' : 'wrong') : ''}" aria-label="Dose in ${unit}"><span class="say-unit">${unit}${j < q.parts.length - 1 ? ',' : '.'}</span>`).join('')}
             <button class="btn primary" ${q.done ? 'disabled' : ''}>Check</button></form>`}
         ${q.done ? `<div class="result ${q.ok ? 'ok' : 'no'}">
-            <b>${q.ok ? 'Yes! ✓' : `Not quite. It’s ${esc(q.choices ? q.answer : fmt(q.answer) + ' ' + q.unit)}`}</b>
+            <b>${q.ok ? 'Yes! ✓' : q.choices ? `Not quite. It’s ${esc(q.answer)}` : 'Not quite.'}</b>
+            ${q.parts ? `<p>${md(`“The dose is ${q.parts.map(([u, a]) => `**${u === 'mg' ? fmtMg(a) : fmt(a)} ${u}**`).join(', which is ')}.”`)}</p>` : ''}
             <ol>${q.work.map(w => `<li>${md(w)}</li>`).join('')}</ol>
           </div>
           <button class="btn primary" data-next>Next question</button>` : ''}
@@ -978,16 +986,18 @@
       if (!q.done) setTimeout(() => $('[data-ans]', host)?.focus({ preventScroll: true }), 0);
       f.onsubmit = e => {
         e.preventDefault();
-        const raw = $('[data-ans]', host).value.trim(); const v = parseFloat(raw.replace(/[^\d.]/g, ''));
-        if (isNaN(v)) return toast('Type a number');
-        finish(raw, Math.abs(v - q.answer) <= Math.max(0.011, q.answer * 0.005));
+        const boxes = $$('[data-ans]', host), raw = boxes.map(b => b.value.trim());
+        const vals = raw.map(r => parseFloat(r.replace(/[^\d.]/g, '')));
+        const empty = vals.findIndex(isNaN);
+        if (empty >= 0) return boxes[empty].focus();  // Enter in the mg box moves on to mL
+        q.partOk = q.parts.map(([u, a], j) => Math.abs(vals[j] - a) <= Math.max(u === 'mg' ? 0.0011 : 0.011, a * 0.005));
+        finish(raw, q.partOk.every(Boolean));
       };
     }
     host.onclick = e => {
       const c = e.target.closest('[data-choice]'); if (c) return finish(c.dataset.choice, c.dataset.choice === q.answer);
       if (e.target.closest('[data-next]')) { drill.q = makeQ(); renderDrill(); }
     };
-    $('[data-hard]', host).onchange = e => { drill.hard = e.target.checked; local.set('hard', drill.hard); };
   }
 
   /* ================= Tips ================= */
