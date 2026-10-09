@@ -975,8 +975,7 @@
             ${open ? k === 'cord' ? `<div class="ask-a"><span class="small">Plan with the obstetric provider:</span><div class="chips">${CORD.map(c => `<button class="chip${scen.cord === c ? ' on' : ''}" data-cord="${esc(c)}">${c}</button>`).join('')}</div></div>`
               : `<div class="ask-a">${esc(answer(k))}</div>` : ''}</div>`;
         }).join('')}</div>
-        ${brief.length ? `<h3 class="sub">Before the birth</h3>
-        <ul class="checks">${brief.map((l, i) => `<li><button class="check${scen.brief.includes(i) ? ' on' : ''}" data-brief="${i}"><span class="box"></span><span>${esc(l)}</span></button></li>`).join('')}</ul>` : ''}
+        ${brief.length ? `<ul class="checks">${brief.map((l, i) => `<li><button class="check${scen.brief.includes(i) ? ' on' : ''}" data-brief="${i}"><span class="box"></span><span><small class="check-label">Before the birth</small>${esc(l)}</span></button></li>`).join('')}</ul>` : ''}
         <div class="run-actions"><button class="btn primary" data-born>Baby is born · start the clock</button></div>
       </section>`;
     host.onclick = e => {

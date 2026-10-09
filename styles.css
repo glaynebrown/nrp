@@ -353,6 +353,8 @@ li.big {
 .check.on .box { background: var(--accent); border-color: var(--accent); }
 .check.on .box::after { content: '✓'; color: var(--on-accent); font-weight: 800; font-size: 14px; }
 .check.on > span:last-child { opacity: .6; text-decoration: line-through; }
+.check-label { display: block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.check.on .check-label { text-decoration: none; }
 .weight { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 8px 0 12px; }
 .weight label { font-weight: 800; display: flex; align-items: center; gap: 8px; }
 .weight input[type=number] { width: 84px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); font-weight: 800; font-size: 18px; text-align: center; }
