@@ -1,0 +1,14 @@
+{
+  "name": "NRP",
+  "short_name": "NRP",
+  "description": "NRP algorithm, med math, airway visuals and notes.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#faf6f3",
+  "theme_color": "#faf6f3",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
