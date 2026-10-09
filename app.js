@@ -929,14 +929,7 @@
             <button data-pm="auto" class="on">Auto “breathe-2-3”</button><button data-pm="hand">You squeeze</button><button data-pm="cpap">CPAP only</button>
           </div>
           <div class="neo-row">
-            <svg class="gauge" viewBox="0 0 200 120" aria-label="Pressure gauge">
-              <path d="M20 105 A80 80 0 0 1 180 105" class="g-track"/>
-              <path d="M20 105 A80 80 0 0 1 180 105" class="g-peep" pathLength="40" stroke-dasharray="0 4 2 40"/>
-              <path d="M20 105 A80 80 0 0 1 180 105" class="g-pip" pathLength="40" stroke-dasharray="0 24 2 40" data-gpip/>
-              ${[0, 10, 20, 30, 40].map(v => { const a = Math.PI * (1 - v / 40); return `<text x="${100 + 64 * Math.cos(a)}" y="${108 - 64 * Math.sin(a)}" class="g-num">${v}</text>`; }).join('')}
-              <line x1="100" y1="105" x2="100" y2="35" class="needle" data-needle/>
-              <circle cx="100" cy="105" r="6" class="hub"/>
-            </svg>
+            ${manometer()}
             <div class="readout"><b data-p>5</b><small>cm H₂O</small><span class="word" data-word></span></div>
           </div>
           <canvas class="wave" data-wave height="160"></canvas>
@@ -980,9 +973,47 @@
     neopuff(); beatTrainer();
   }
 
+  /* A manometer like the one on the resuscitator: -10 to 80 cm H2O, 0 near the bottom,
+     rising clockwise up the left side. Green 0-30, red dashes 30-50, solid red 50-80.
+     Angles are degrees clockwise from 12 o'clock. */
+  const dialAngle = v => 190 + Math.max(-12, Math.min(82, v)) * 2.8;
+  function manometer() {
+    const C = 120, pt = (v, r) => { const a = dialAngle(v) * Math.PI / 180; return [C + r * Math.sin(a), C - r * Math.cos(a)]; };
+    const arc = (v0, v1, r) => { const [x0, y0] = pt(v0, r), [x1, y1] = pt(v1, r); return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 ${(v1 - v0) * 2.8 > 180 ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+    let ticks = '';
+    for (let v = -10; v <= 80; v += 2) {
+      const major = v % 10 === 0, [x0, y0] = pt(v, 86), [x1, y1] = pt(v, major ? 74 : 79);
+      ticks += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" class="${major ? 'tk-major' : 'tk'}"/>`;
+      if (major) { const [tx, ty] = pt(v, 62); ticks += `<text x="${tx.toFixed(1)}" y="${(ty + 4.5).toFixed(1)}" class="d-num">${v}</text>`; }
+    }
+    const [mx, my] = pt(0, 100);
+    return `<svg class="gauge" viewBox="0 0 240 240" aria-label="Pressure gauge, cm H2O">
+      <defs>
+        <linearGradient id="bezel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset=".45" stop-color="#9aa0a8"/><stop offset=".55" stop-color="#c9cdd2"/><stop offset="1" stop-color="#6d737b"/></linearGradient>
+        <radialGradient id="face" cx=".5" cy=".42" r=".6"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eef0f2"/></radialGradient>
+      </defs>
+      <circle cx="${C}" cy="${C}" r="116" fill="url(#bezel)"/>
+      <circle cx="${C}" cy="${C}" r="106" fill="#d9dce0"/>
+      <circle cx="${C}" cy="${C}" r="103" fill="url(#face)"/>
+      <path d="${arc(0, 30, 90)}" class="z-green"/>
+      <path d="${arc(30, 50, 90)}" class="z-dash"/>
+      <path d="${arc(50, 80, 90)}" class="z-red"/>
+      ${ticks}
+      <text x="176" y="128" class="d-unit">cm H₂O</text>
+      <text x="168" y="172" class="d-unit small">(mbar)</text>
+      <g data-gpip transform="rotate(${dialAngle(25)} 120 120)"><path d="M120 25 l-5.5 -9 h11 z" class="mk-pip"/></g>
+      <g transform="rotate(${dialAngle(5)} 120 120)"><path d="M120 25 l-5.5 -9 h11 z" class="mk-peep"/></g>
+      <g data-needle transform="rotate(${dialAngle(5)} 120 120)">
+        <path d="M118.6 120 L119.4 42 L120.6 42 L121.4 120 Z" class="ndl"/>
+        <path d="M113 150 Q120 140 127 150 L123 124 L117 124 Z" class="ndl"/>
+      </g>
+      <circle cx="${C}" cy="${C}" r="9" class="hub"/><circle cx="${C}" cy="${C}" r="3" class="hub-dot"/>
+    </svg>`;
+  }
+
   function neopuff() {
     const canvas = $('[data-wave]'), ctx = canvas.getContext('2d');
-    let mode = 'auto', target = 5, p = 5, rate = 40, pip = 25, maxPip = 40, t0 = performance.now(), hist = [], raf, last = 0;
+    let mode = 'auto', target = 5, p = 5, nVal = 5, nVel = 0, lastN = 0, rate = 40, pip = 25, maxPip = 40, t0 = performance.now(), hist = [], raf, last = 0;
     const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     function size() { const dpr = devicePixelRatio || 1; canvas.width = canvas.clientWidth * dpr; canvas.height = 160 * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
     size(); const ro = new ResizeObserver(size); ro.observe(canvas);
@@ -1001,9 +1032,11 @@
       if (!hist.length) steps = 1;
       while (steps-- > 0) { p += (target - p) * 0.22; hist.push(p); }
       while (hist.length > W / 2) hist.shift();
-      const ang = Math.PI * (1 - p / 40);
+      // The needle chases the pressure on a little spring, so it overshoots and settles like a real one.
+      for (let i = 0; i < Math.max(1, Math.min(10, Math.round((ts - (lastN || ts)) / 16.7))); i++) { nVel = nVel * 0.62 + (p - nVal) * 0.3; nVal += nVel; }
+      lastN = ts;
       const n = $('[data-needle]'); if (!n) return;
-      n.setAttribute('x2', 100 + 70 * Math.cos(ang)); n.setAttribute('y2', 105 - 70 * Math.sin(ang));
+      n.setAttribute('transform', `rotate(${dialAngle(nVal)} 120 120)`);
       $('[data-p]').textContent = Math.round(p);
       // waveform
       const H = 160, y = v => H - 14 - (v / 42) * (H - 28);
@@ -1047,7 +1080,7 @@
       pip = Math.max(20, Math.min(maxPip, Math.round(v / 5) * 5)); pipIn.value = pip; pipIn.max = maxPip;
       $$('[data-pipstep]').forEach(b => b.disabled = (+b.dataset.pipstep < 0 ? pip <= 20 : pip >= maxPip));
       $('[data-pipv]').textContent = pip;
-      $('[data-gpip]').setAttribute('stroke-dasharray', `0 ${pip - 1} 2 40`);
+      $('[data-gpip]').setAttribute('transform', `rotate(${dialAngle(pip)} 120 120)`);
       if (mode === 'hand' && target > 5) target = pip;
     }
     pipIn.oninput = () => setPip(+pipIn.value);

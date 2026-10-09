@@ -410,15 +410,21 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .neo { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .neo-modes { flex-wrap: wrap; justify-content: center; }
 .neo-row { display: flex; gap: 20px; align-items: center; }
-.gauge { width: 220px; }
-.g-track { fill: none; stroke: var(--soft); stroke-width: 14; }
-.g-peep { fill: none; stroke: var(--ph-first); stroke-width: 14; }
-.g-pip { fill: none; stroke: var(--ph-meds); stroke-width: 14; }
-.g-num { font-size: 11px; fill: var(--muted); font-weight: 800; text-anchor: middle; }
-.gauge .needle { stroke: var(--text); stroke-width: 4; stroke-linecap: round; }
-.gauge .hub { fill: var(--text); }
+.gauge { width: 230px; filter: drop-shadow(0 4px 10px rgb(0 0 0 / .15)); }
+/* The real gauge has a white face, so it stays white in every color theme. */
+.gauge .z-green { fill: none; stroke: #2e9a5b; stroke-width: 6; }
+.gauge .z-dash { fill: none; stroke: #9b2d35; stroke-width: 6; stroke-dasharray: 5 4; }
+.gauge .z-red { fill: none; stroke: #9b2d35; stroke-width: 6; }
+.gauge .tk { stroke: #1d1d1f; stroke-width: 1; }
+.gauge .tk-major { stroke: #1d1d1f; stroke-width: 2; }
+.gauge .d-num { font: 700 12.5px Arial, Helvetica, sans-serif; fill: #1d1d1f; text-anchor: middle; }
+.gauge .d-unit { font: 700 11px Arial, Helvetica, sans-serif; fill: #1d1d1f; text-anchor: middle; }
+.gauge .d-unit.small { font-size: 10px; font-weight: 400; }
+.gauge .ndl { fill: #111; }
+.gauge .hub { fill: #111; } .gauge .hub-dot { fill: #555; }
+.gauge .mk-pip { fill: var(--ph-meds); } .gauge .mk-peep { fill: var(--ph-first); }
 .readout { display: flex; flex-direction: column; min-width: 120px; }
-.readout b { font-size: 48px; line-height: 1; font-variant-numeric: tabular-nums; }
+.readout b { font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
 .readout small { color: var(--muted); font-weight: 700; }
 .readout .word { font: 26px var(--hand); color: var(--lav-ink); min-height: 34px; }
 .wave { width: 100%; height: 160px; background: var(--soft); border-radius: 14px; }
@@ -445,8 +451,8 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 @media (max-width: 560px) {
   .pp-cards { grid-template-columns: 1fr; }
   .neo-row { gap: 8px; }
-  .gauge { width: 170px; }
-  .readout b { font-size: 38px; }
+  .gauge { width: 190px; }
+  .readout b { font-size: 32px; }
 }
 
 /* ---------- Notes ---------- */
