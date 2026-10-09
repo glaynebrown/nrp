@@ -35,6 +35,8 @@
     play: svg('<path d="M7 4.5v15l12-7.5z"/>'),
     pencil: svg('<path d="M4 20l1-5L16 4l4 4L9 19l-5 1z"/>'),
     clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+    soundOn: svg('<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/>'),
+    soundOff: svg('<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M16 9l6 6M22 9l-6 6"/>'),
   };
   // Icons that can sit before a big step's title (picked per step in Edit cards).
   const STEP_ICONS = [
@@ -730,6 +732,20 @@
   }
   const beat = () => `<div class="beat" aria-label="1 and 2 and 3 and breathe"><span>1</span><span>2</span><span>3</span><span class="br">Breathe</span></div>`;
 
+  // Chimes: two-tone "check HR" when a countdown runs out; epi chime at 3 min (soft) and 5 min (stronger).
+  let runSound = local.get('runSound', true);
+  const cued = new Set();
+  function cue(key, left, kind) {
+    if (left > 0 || cued.has(key)) return false;
+    cued.add(key);
+    if (runSound && left > -1.5) {  // only right as it happens, not when reopening an old run
+      const at = (ms, f, len, vol) => setTimeout(() => sound.beep(f, len, vol), ms);
+      if (kind === 'check') { at(0, 784, .3, .35); at(200, 1047, .45, .35); }
+      if (kind === 'epi') { at(0, 523, .25, .3); at(260, 523, .25, .3); }
+      if (kind === 'epiDue') [0, 160, 320, 800, 960, 1120].forEach(ms => at(ms, 880, .14, .45));
+    }
+    return true;
+  }
   let tick = null;
   function renderRun(host) {
     if (!run) { run = newRun(); saveRun(); }
@@ -739,6 +755,7 @@
         <div class="run-clock">
           <div><small>Since birth</small><b data-clock>${run.start ? mmss(since(run.start)) : '–:––'}</b></div>
           ${run.epiAt ? `<div class="epi-chip" data-epichip><small>Last epi</small><b data-since="${run.epiAt}">${mmss(since(run.epiAt))}</b></div>` : ''}
+          <button class="icon-btn" data-act="sound" aria-label="${runSound ? 'Sound on' : 'Sound off'}" title="${runSound ? 'Sound on' : 'Sound off'}">${runSound ? icons.soundOn : icons.soundOff}</button>
           <button class="btn ghost small" data-act="reset">Start over</button>
         </div>
         <section class="run-step ph-${s.phase}">
@@ -756,11 +773,13 @@
       </div>`;
     host.onclick = e => {
       const t = e.target;
+      if (runSound) sound.unlock();  // iPhone only allows sound after a tap
       const g = t.closest('[data-go]'); if (g) return s.actions[+g.dataset.go][1]();
       const c = t.closest('[data-check]');
       if (c) { const i = +c.dataset.check; run.checks.includes(i) ? run.checks.splice(run.checks.indexOf(i), 1) : run.checks.push(i); c.classList.toggle('on'); saveRun(); return; }
       const kg = t.closest('[data-kg]'); if (kg) { run.weight = +kg.dataset.kg; saveRun(); return renderRun(host); }
       const a = t.closest('[data-act]')?.dataset.act;
+      if (a === 'sound') { runSound = !runSound; local.set('runSound', runSound); if (runSound) sound.unlock(); return renderRun(host); }
       if (a === 'reset') { run = newRun(); saveRun(); return renderRun(host); }
       if (a === 'end') return go('debrief', 'Ended');
     };
@@ -773,6 +792,7 @@
       $$('[data-since]', host).forEach(el => el.textContent = mmss(since(+el.dataset.since)));
       if (run.epiAt) {
         const s2 = since(run.epiAt);
+        if (['cpr', 'epi', 'cpr2', 'volume'].includes(run.step)) { cue(`epi${run.epiAt}:180`, 180 - s2, 'epi'); cue(`epi${run.epiAt}:300`, 300 - s2, 'epiDue'); }
         const chip = $('[data-epichip]', host); if (chip) chip.className = 'epi-chip' + (s2 >= 300 ? ' late' : s2 >= 180 ? ' due' : '');
         const h = $('[data-epihint]', host); if (h) h.textContent = s2 >= 300 ? '· due now' : s2 >= 180 ? '· may repeat' : '';
       }
@@ -783,6 +803,7 @@
         $('[data-cdn]', cd).textContent = left > 0 ? Math.ceil(left) : '0';
         $('.prog', cd).style.strokeDashoffset = Math.max(0, Math.min(100, 100 - (left / secs) * 100));
         if (left <= 0 && !cd.classList.contains('done')) { cd.classList.add('done'); navigator.vibrate?.(200); }
+        cue(`cd${cd.dataset.from}:${secs}`, left, 'check');
       }
     };
     update(); tick = setInterval(update, 250);
