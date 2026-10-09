@@ -137,6 +137,13 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .flow-top { text-align: center; margin-bottom: 10px; }
 .mode-hint { color: var(--muted); margin: 10px 0 0; }
 .flow-tools { display: flex; justify-content: flex-end; gap: 8px; align-items: center; margin-bottom: 10px; }
+.flow-tools.ref-tools { justify-content: space-between; padding: 0 4px; }
+.mode-hint.empty-hint { display: none; }
+.icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; }
+.icon-btn:hover { background: var(--soft); color: var(--text); }
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn.caret .chev { margin: 0 0 4px; }
+.icon-btn.caret.up .chev { transform: rotate(225deg); margin: 4px 0 0; }
 .flow { list-style: none; margin: 0; padding: 0; }
 .arrow { height: 26px; position: relative; }
 .arrow::before { content: ''; position: absolute; left: 37px; top: 2px; bottom: 4px; width: 2px; background: var(--line); }
@@ -214,6 +221,19 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .edit-card label small { font-weight: 600; color: var(--muted); }
 .edit-card input:not(.ec-title), .edit-card textarea { width: 100%; border: 1.5px solid var(--line); border-radius: 12px; padding: 8px 12px; background: var(--card); font-size: 16px; font-weight: 400; line-height: 1.5; resize: none; outline: none; }
 .edit-card input:focus, .edit-card textarea:focus { border-color: var(--pill); }
+.eg-opts { display: flex; align-items: center; gap: 12px; margin: 8px 0 0 56px; font-size: 14px; font-weight: 700; color: var(--muted); }
+.eg-opts select { margin-left: 6px; border: 1.5px solid var(--line); border-radius: 10px; padding: 4px 8px; background: var(--card); font-size: 15px; }
+.mv { display: inline-flex; gap: 4px; margin-left: auto; }
+.mini-btn { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--card); cursor: pointer; display: grid; place-items: center; font-weight: 800; color: var(--muted); }
+.mini-btn:disabled { opacity: .3; cursor: default; }
+.mini-btn.del:hover { color: var(--ph-cpr); border-color: var(--ph-cpr); }
+.mini-btn svg { width: 16px; height: 16px; }
+.ec-spacer { flex: 1; }
+.edit-group .add { margin-top: 12px; border-style: dashed; }
+.add-row { margin: 4px 0 18px; }
+.reset-all { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; border-top: 1px dashed var(--line); padding-top: 16px; margin-bottom: 18px; }
+.reset-all small { color: var(--muted); font-size: 13px; }
+.add-row .btn { border-style: dashed; }
 .med-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .med-row label { width: 120px; } .med-row label.grow { flex: 1; min-width: 180px; }
 

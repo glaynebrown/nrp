@@ -29,6 +29,8 @@
     tips: svg('<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0012 3z"/>'),
     notes: svg('<path d="M4 20l1-5L16 4l4 4L9 19l-5 1z"/><path d="M14 6l4 4"/>'),
     settings: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>'),
+    edit: svg('<path d="M12 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.4 2.6a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/>'),
+    trash: svg('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>'),
     pencil: svg('<path d="M4 20l1-5L16 4l4 4L9 19l-5 1z"/>'),
     clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
   };
@@ -142,37 +144,56 @@
   const stopAnimations = () => { anims.forEach(f => f()); anims = []; };
 
   /* ================= Algorithm ================= */
-  const CARD = Object.fromEntries(NRP.cards.map(c => [c.id, c]));
+  const CARD = {};
 
   /* ---------- Your edits to the cards (and doses) ----------
-     content.js is the original. Your changes are kept separately in `edits`
-     ({ cards: {id: {...}}, groups: {id: {...}}, meds: {id: {...}} }), saved to your
-     account, and laid on top -- so any card can be reset to the original. */
+     content.js is the original. Your changes are kept separately in `edits`, saved
+     to your account, and laid on top -- so anything can be reset to the original:
+       cards/groups/meds: {id: {changed fields}}  (custom: true = a step you added)
+       layout: [{id, cards: [cardIds]}]           (only once you add/remove/reorder) */
   const BASE = JSON.parse(JSON.stringify({ cards: NRP.cards, groups: NRP.groups, meds: NRP.meds }));
   const baseOf = (kind, id) => BASE[kind].find(x => x.id === id);
-  let edits = local.get('edits', { cards: {}, groups: {}, meds: {} });
+  const copy = o => JSON.parse(JSON.stringify(o));
+  let edits = local.get('edits', {});
   function applyEdits() {
-    ['cards', 'groups', 'meds'].forEach(kind => NRP[kind].forEach(item => {
-      const base = baseOf(kind, item.id);
-      Object.keys(item).forEach(k => { if (!(k in base)) delete item[k]; });
-      Object.assign(item, JSON.parse(JSON.stringify(base)), (edits[kind] || {})[item.id] || {});
-    }));
+    edits = { cards: {}, groups: {}, meds: {}, layout: null, ...edits };
+    NRP.meds.forEach(m => Object.assign(m, copy(baseOf('meds', m.id)), edits.meds[m.id] || {}));
+    const custom = Object.entries(edits.cards).filter(([, c]) => c.custom).map(([id, c]) => ({ id, phase: 'after', title: '', summary: '', lines: [], asides: [], ...c }));
+    NRP.cards = [...BASE.cards.map(b => ({ ...copy(b), ...(edits.cards[b.id] || {}) })), ...custom];
+    Object.keys(CARD).forEach(k => delete CARD[k]);
+    NRP.cards.forEach(c => { CARD[c.id] = c; });
+    const layout = edits.layout || BASE.groups.map(g => ({ id: g.id, cards: g.cards }));
+    NRP.groups = layout.map(({ id, cards }) => {
+      const b = baseOf('groups', id), e = edits.groups[id] || {};
+      return { phase: 'after', title: '', ...(b ? copy(b) : {}), ...e, id, cards: cards.filter(c => CARD[c]) };
+    }).filter(g => g.cards.length);
   }
   applyEdits();
   let editsTimer = null;
   function saveEdits() {
     local.set('edits', edits);
     clearTimeout(editsTimer);
-    editsTimer = setTimeout(() => Store.savePrefs({ edits: JSON.parse(JSON.stringify(edits)) }).catch(() => {}), 800);
+    editsTimer = setTimeout(() => Store.savePrefs({ edits: copy(edits) }).catch(() => {}), 800);
   }
   function setEdit(kind, id, field, value) {
+    const e = (edits[kind][id] ||= {});
     const base = baseOf(kind, id);
-    const e = ((edits[kind] ||= {})[id] ||= {});
-    if (JSON.stringify(value) === JSON.stringify(base[field] ?? (Array.isArray(value) ? [] : ''))) delete e[field]; else e[field] = value;
+    if (e.custom || !base) e[field] = value;
+    else if (JSON.stringify(value) === JSON.stringify(base[field] ?? (Array.isArray(value) ? [] : ''))) delete e[field];
+    else e[field] = value;
     if (!Object.keys(e).length) delete edits[kind][id];
     applyEdits(); saveEdits();
   }
-  const isEdited = (kind, id) => !!(edits[kind] || {})[id];
+  const isEdited = (kind, id) => !!edits[kind][id] && !edits[kind][id].custom;
+  // Add / remove / move steps. The first change copies the current order into edits.layout.
+  function changeLayout(fn) {
+    edits.layout = NRP.groups.map(g => ({ id: g.id, cards: [...g.cards] }));
+    fn(edits.layout);
+    edits.layout = edits.layout.filter(g => g.cards.length);
+    applyEdits(); saveEdits();
+  }
+  const cardTitle = id => CARD[id]?.title || NRP.groups.find(g => g.cards.includes(id))?.title || 'Untitled';
+  const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 
   const noteFor = cardId => notes.find(n => n.cardId === cardId);
   const hasContent = n => n && ((n.text || '').trim() || (n.strokes || []).length);
@@ -183,8 +204,8 @@
         <div class="seg big" role="tablist">
           ${[['ref', 'Reference'], ['notes', 'Notes'], ['study', 'Study'], ['run', 'Run it']].map(([k, l]) => `<button data-mode="${k}" class="${flowMode === k ? 'on' : ''}">${l}</button>`).join('')}
         </div>
-        <p class="mode-hint">${{
-          ref: 'Six big steps. Tap one to see its substeps. ✎ opens your notes.',
+        <p class="mode-hint${flowMode === 'ref' ? ' empty-hint' : ''}">${{
+          ref: '',
           notes: 'All your notes in one place. Tap one to open it, tap again to close.',
           study: 'Each point is hidden. Say it out loud, then tap to check.',
           run: 'Practice a code with live timers. Tap what the baby is doing.',
@@ -211,11 +232,11 @@
     const allIds = [...NRP.groups.map(g => g.id), ...NRP.groups.filter(g => g.cards.length > 1).flatMap(g => g.cards)];
     const allOpen = allIds.every(id => open.has(id));
     host.innerHTML = `
-      <div class="flow-tools">
+      <div class="flow-tools${study ? '' : ' ref-tools'}">
         ${study ? `<span class="pill-count">${revealed.size} / ${total} checked</span>
           <button class="btn ghost small" data-act="hide">Hide all again</button>`
-        : `<button class="btn ghost small" data-act="edit">${icons.pencil} Edit cards</button>
-           <button class="btn ghost small" data-act="all">${allOpen ? 'Close all' : 'Open all'}</button>`}
+        : `<button class="icon-btn" data-act="edit" aria-label="Edit cards" title="Edit cards">${icons.edit}</button>
+           <button class="icon-btn caret${allOpen ? ' up' : ''}" data-act="all" aria-label="${allOpen ? 'Close all' : 'Open all'}" title="${allOpen ? 'Close all' : 'Open all'}"><span class="chev"></span></button>`}
       </div>
       <ol class="flow">${NRP.groups.map((g, i) => groupHtml(g, i, study)).join('<li class="arrow" aria-hidden="true"></li>')}</ol>`;
     host.onclick = e => {
@@ -248,7 +269,7 @@
         <span class="bignum">${i + 1}</span>
         <span class="titles">
           <span class="big-title">${esc(g.title)}</span>
-          <span class="subnames">${single ? esc(cards[0].summary) : cards.map((c, j) => `<span><i>${'abc'[j]}</i>${esc(c.title)}</span>`).join('')}</span>
+          <span class="subnames">${single ? esc(cards[0].summary) : cards.map((c, j) => `<span><i>${'abcdefghij'[j]}</i>${esc(c.title)}</span>`).join('')}</span>
         </span>
         ${g.timer ? `<span class="timer-tag">${icons.clock} ${esc(g.timer)}</span>` : ''}
         ${study ? '' : '<span class="chev" aria-hidden="true"></span>'}
@@ -265,7 +286,7 @@
     return `
     <li class="sub${isOpen ? ' open' : ''}" data-id="${c.id}">
       <button class="sub-head" aria-expanded="${isOpen}">
-        <span class="subnum">${'abc'[j]}</span>
+        <span class="subnum">${'abcdefghij'[j]}</span>
         <span class="titles"><span class="title">${esc(c.title)}</span>${study ? '' : `<span class="summary">${esc(c.summary)}</span>`}</span>
         ${study ? '' : '<span class="chev" aria-hidden="true"></span>'}
       </button>
@@ -288,15 +309,21 @@
   }
 
   /* ---------- Edit cards ---------- */
+  const PHASE_NAMES = { prep: 'Rose', first: 'Peach', vent: 'Lavender', cpr: 'Red', meds: 'Purple', after: 'Blue' };
   let editMode = false, lastField = null;
   function renderEditCards(host) {
     const lines = a => esc((a || []).join('\n'));
-    const card = (c, j, multi) => `
+    const mv = (kind, id, i, n) => `<span class="mv">
+        <button class="mini-btn" data-move="${kind}:${id}:-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+        <button class="mini-btn" data-move="${kind}:${id}:1" ${i === n - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+        <button class="mini-btn del" data-remove="${kind}:${id}" aria-label="Remove">${icons.trash}</button></span>`;
+    const card = (c, j, g) => `
       <div class="edit-card">
         <div class="ec-head">
-          ${multi ? `<span class="subnum">${'abc'[j]}</span>` : ''}
-          <input class="ec-title" value="${esc(c.title)}" data-k="cards" data-id="${c.id}" data-f="title" aria-label="Card title">
+          ${g.cards.length > 1 ? `<span class="subnum">${'abcdefghij'[j] || j + 1}</span>
+          <input class="ec-title" value="${esc(c.title)}" placeholder="Substep title" data-k="cards" data-id="${c.id}" data-f="title" aria-label="Substep title">` : '<span class="ec-spacer"></span>'}
           ${isEdited('cards', c.id) ? `<button class="link" data-reset="cards:${c.id}">Reset to original</button>` : ''}
+          ${g.cards.length > 1 ? mv('card', c.id, j, g.cards.length) : ''}
         </div>
         <label>Summary <small>(shown when the card is closed)</small>
           <input value="${esc(c.summary)}" data-k="cards" data-id="${c.id}" data-f="summary"></label>
@@ -323,11 +350,22 @@
         <section class="edit-group ph-${g.phase}">
           <div class="eg-head">
             <span class="bignum">${i + 1}</span>
-            <input class="eg-title" value="${esc(g.title)}" data-k="groups" data-id="${g.id}" data-f="title" aria-label="Step title">
-            ${isEdited('groups', g.id) ? `<button class="link" data-reset="groups:${g.id}">Reset</button>` : ''}
+            <input class="eg-title" value="${esc(g.title)}" placeholder="Step title" data-k="groups" data-id="${g.id}" data-f="title" aria-label="Step title">
+            ${mv('group', g.id, i, NRP.groups.length)}
           </div>
-          ${g.cards.map((id, j) => card(CARD[id], j, g.cards.length > 1)).join('')}
+          <div class="eg-opts">
+            <label>Color <select data-k="groups" data-id="${g.id}" data-f="phase">${Object.entries(NRP.phases).map(([k]) => `<option value="${k}" ${g.phase === k ? 'selected' : ''}>${esc(PHASE_NAMES[k])}</option>`).join('')}</select></label>
+            ${isEdited('groups', g.id) ? `<button class="link" data-reset="groups:${g.id}">Reset title + color</button>` : ''}
+          </div>
+          ${g.cards.map((id, j) => card(CARD[id], j, g)).join('')}
+          <button class="btn ghost small add" data-addsub="${g.id}">+ Add substep</button>
         </section>`).join('')}
+      <div class="row-between add-row">
+        <button class="btn ghost" data-addstep>+ Add big step</button>
+        ${edits.layout ? '<button class="link" data-resetlayout>Put steps back in the original order</button>' : ''}
+      </div>
+      ${edits.layout || Object.keys(edits.cards).length || Object.keys(edits.groups).length
+        ? '<div class="reset-all"><button class="btn ghost danger-text" data-resetall>Reset all steps to original</button><small>Undoes every wording change, added step and removed step. Your notes and doses stay.</small></div>' : ''}
       <section class="edit-group ph-meds">
         <div class="eg-head"><span class="bignum">℞</span><h3 class="eg-title">Doses <small>(used in Med math + Run it)</small></h3></div>
         ${NRP.meds.map(m => `<div class="edit-card med-edit">
@@ -360,11 +398,59 @@
       if (isEdited(el.dataset.k, el.dataset.id) && !existing) head.insertAdjacentHTML('beforeend', `<button class="link" data-reset="${key}">${el.dataset.k === 'groups' ? 'Reset' : 'Reset to original'}</button>`);
       if (!isEdited(el.dataset.k, el.dataset.id) && existing) existing.remove();
     }
-    host.addEventListener('focusin', e => { if (e.target.matches('input:not([type=number]), textarea')) lastField = e.target; });
+    host.onfocusin = e => { if (e.target.matches('input:not([type=number]), textarea')) lastField = e.target; };
+    host.onchange = e => { if (e.target.tagName === 'SELECT') renderEditCards(host); };
     $$('[data-fmt]', host).forEach(b => b.onmousedown = e => e.preventDefault());
     host.onclick = async e => {
       const t = e.target;
       if (t.closest('[data-act="editdone"]')) { editMode = false; return renderCards(host); }
+      const keepY = () => { const y = window.scrollY; renderEditCards(host); window.scrollTo({ top: y }); };
+      const mvb = t.closest('[data-move]');
+      if (mvb) {
+        const [kind, id, d] = mvb.dataset.move.split(':'), dir = +d;
+        changeLayout(L => {
+          const swap = (arr, i) => { const j = i + dir; if (j >= 0 && j < arr.length) [arr[i], arr[j]] = [arr[j], arr[i]]; };
+          if (kind === 'group') swap(L, L.findIndex(g => g.id === id));
+          else { const g = L.find(g => g.cards.includes(id)); swap(g.cards, g.cards.indexOf(id)); }
+        });
+        return keepY();
+      }
+      const rm = t.closest('[data-remove]');
+      if (rm) {
+        const [kind, id] = rm.dataset.remove.split(':');
+        const name = kind === 'group' ? NRP.groups.find(g => g.id === id).title : cardTitle(id);
+        if (!(await ask(`Remove “${name || 'this'}”?`, 'Any notes you wrote on it stay in your Notes. You can put the original steps back later.', 'Remove'))) return;
+        changeLayout(L => {
+          if (kind === 'group') { const i = L.findIndex(g => g.id === id); L[i].cards.forEach(c => { if (edits.cards[c]?.custom) delete edits.cards[c]; }); L.splice(i, 1); if (edits.groups[id]?.custom) delete edits.groups[id]; }
+          else { L.forEach(g => { g.cards = g.cards.filter(c => c !== id); }); if (edits.cards[id]?.custom) delete edits.cards[id]; }
+        });
+        return keepY();
+      }
+      const addsub = t.closest('[data-addsub]');
+      if (addsub) {
+        const g = NRP.groups.find(x => x.id === addsub.dataset.addsub), cid = uid('c');
+        edits.cards[cid] = { custom: true, phase: g.phase, title: '', summary: '', lines: [], asides: [] };
+        changeLayout(L => L.find(x => x.id === g.id).cards.push(cid));
+        keepY(); return $(`input[data-id="${cid}"][data-f="title"]`, host)?.focus();
+      }
+      if (t.closest('[data-addstep]')) {
+        const gid = uid('g'), cid = uid('c');
+        edits.groups[gid] = { custom: true, title: '', phase: 'after' };
+        edits.cards[cid] = { custom: true, phase: 'after', title: '', summary: '', lines: [], asides: [] };
+        changeLayout(L => L.push({ id: gid, cards: [cid] }));
+        keepY(); return $(`input[data-id="${gid}"][data-f="title"]`, host)?.focus();
+      }
+      if (t.closest('[data-resetall]')) {
+        if (!(await ask('Reset all steps to the original?', 'Every card goes back to how it came: wording, order, and added or removed steps. Your notes and doses stay.', 'Reset all'))) return;
+        edits.cards = {}; edits.groups = {}; edits.layout = null;
+        applyEdits(); saveEdits(); return keepY();
+      }
+      if (t.closest('[data-resetlayout]')) {
+        if (!(await ask('Put the original steps back?', 'Steps you removed come back and the order resets. Steps you added are removed (their notes stay in Notes). Your wording changes stay.', 'Reset order'))) return;
+        Object.keys(edits.cards).forEach(k => { if (edits.cards[k].custom) delete edits.cards[k]; });
+        Object.keys(edits.groups).forEach(k => { if (edits.groups[k].custom) delete edits.groups[k]; });
+        edits.layout = null; applyEdits(); saveEdits(); return keepY();
+      }
       const r = t.closest('[data-reset]');
       if (r) {
         const [kind, id] = r.dataset.reset.split(':');
@@ -385,9 +471,9 @@
   // Where a step's note sits in the algorithm, e.g. "2b".
   function stepLabel(cardId) {
     const gi = NRP.groups.findIndex(g => g.cards.includes(cardId)), g = NRP.groups[gi];
-    return g.cards.length > 1 ? `${gi + 1}${'abc'[g.cards.indexOf(cardId)]}` : `${gi + 1}`;
+    return g.cards.length > 1 ? `${gi + 1}${'abcdefghij'[g.cards.indexOf(cardId)]}` : `${gi + 1}`;
   }
-  const keyFor = n => n.cardId || 'page:' + n.id;
+  const keyFor = n => (n.cardId && CARD[n.cardId]) ? n.cardId : 'page:' + n.id;
   const noteForKey = key => key.startsWith('page:') ? notes.find(n => n.id === key.slice(5)) : noteFor(key);
   function drawPreviews(root) {
     $$('canvas[data-preview]', root).forEach(cv => { const n = notes.find(x => x.id === cv.dataset.preview); if (n) Ink.preview(cv, n.strokes); });
@@ -407,19 +493,19 @@
       return;
     }
     const n = noteForKey(key);
-    mountEditor(area, n || { title: CARD[key].title, text: '', cardId: key, strokes: [], h: 900 }, { key, title: key.startsWith('page:'), canDelete: flowMode === 'notes' });
+    mountEditor(area, n || { title: cardTitle(key), text: '', cardId: key, strokes: [], h: 900 }, { key, title: key.startsWith('page:'), canDelete: flowMode === 'notes' });
   }
 
   // ---- Notes view: every step note (in algorithm order) + extra notes ----
   function renderNotesMode(host) {
     const stepNotes = NRP.cards.map(c => noteFor(c.id)).filter(hasContent);
-    const extra = notes.filter(n => !n.cardId).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    const extra = notes.filter(n => !n.cardId || (!CARD[n.cardId] && hasContent(n))).sort((a, b) => (b.updated || 0) - (a.updated || 0));
     const item = n => {
       const key = keyFor(n), date = new Date(n.updated || 0).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      const label = n.cardId ? `<span class="nlabel ph-${NRP.groups.find(g => g.cards.includes(n.cardId)).phase}">${stepLabel(n.cardId)}</span>` : '';
+      const label = n.cardId && CARD[n.cardId] ? `<span class="nlabel ph-${NRP.groups.find(g => g.cards.includes(n.cardId)).phase}">${stepLabel(n.cardId)}</span>` : '';
       return `<div class="nitem">
         <button class="nitem-head" data-notes-toggle="${esc(key)}">
-          ${label}<span class="ntitle">${esc(n.cardId ? CARD[n.cardId].title : (n.title || 'Untitled'))}</span><small>${date}</small>
+          ${label}<span class="ntitle">${esc(n.cardId && CARD[n.cardId] ? cardTitle(n.cardId) : (n.title || 'Untitled'))}</span><small>${date}</small>
         </button>
         <div class="nitem-prev">
           ${(n.text || '').trim() ? `<p class="np-text">${esc(n.text)}</p>` : ''}
@@ -468,17 +554,18 @@
     return row ? `${row[1]}–${row[2]}%` : 'not yet (under 1 min)';
   };
 
+  const runCard = id => CARD[id] || baseOf('cards', id);
   const STEPS = {
     ready: () => ({
       title: 'Get ready', phase: 'prep',
       body: `<p>Estimate the weight, then run the prep questions.</p>
         ${weightPicker()}
-        ${checklist(NRP.cards[0].lines)}`,
+        ${checklist(runCard('prep').lines)}`,
       actions: [['Baby is born · start the clock', () => { run.start = now(); go('rapid', `Birth. Est. weight ${run.weight} kg`); }, 'primary']],
     }),
     rapid: () => ({
       title: 'Rapid evaluation', phase: 'first', countdown: { from: run.start, secs: 60, label: 'Golden minute' },
-      body: `<ul class="lines">${NRP.cards[1].lines.slice(0, 3).map(l => `<li class="line">${md(l)}</li>`).join('')}</ul>`,
+      body: `<ul class="lines">${runCard('rapid').lines.slice(0, 3).map(l => `<li class="line">${md(l)}</li>`).join('')}</ul>`,
       actions: [['All yes', () => go('routine', 'Rapid eval: all yes → delayed cord clamping'), ''], ['Any no', () => go('initial', 'Rapid eval: not all yes → initial steps'), 'primary']],
     }),
     routine: () => ({
@@ -488,7 +575,7 @@
     }),
     initial: () => ({
       title: 'Initial steps', phase: 'first', countdown: { from: run.start, secs: 60, label: 'Golden minute' },
-      body: checklist(NRP.cards[2].lines),
+      body: checklist(runCard('initial').lines),
       actions: [['Assess breathing + HR', () => go('decision', 'Initial steps done'), 'primary']],
     }),
     decision: () => ({
@@ -513,7 +600,7 @@
     }),
     mrsopa: () => ({
       title: 'MR. SOPA', phase: 'vent',
-      body: checklist(NRP.cards[5].lines) + `<p class="aside">Stay here until chest rise!</p>`,
+      body: checklist(runCard('mrsopa').lines) + `<p class="aside">Stay here until chest rise!</p>`,
       actions: [['Chest rise now', () => go('ppv30', `Chest rise after MR. SOPA (${run.checks.length} steps)`), 'primary']],
     }),
     ppv30: () => ({
@@ -1129,8 +1216,8 @@
     if (u && !u.sample) {
       const p = await Store.getPrefs();
       if (p && p.theme) { Object.assign(theme, p.theme); theme.fonts ||= { hand: 'Patrick Hand', body: 'Nunito' }; saveTheme(false); }
-      if (p && p.edits) { edits = { cards: {}, groups: {}, meds: {}, ...p.edits }; local.set('edits', edits); applyEdits(); }
-      else if (Object.keys(edits.cards).length + Object.keys(edits.groups).length + Object.keys(edits.meds).length) saveEdits();
+      if (p && p.edits) { edits = p.edits; applyEdits(); local.set('edits', edits); }
+      else if (Object.keys(edits.cards).length + Object.keys(edits.groups).length + Object.keys(edits.meds).length || edits.layout) saveEdits();
       seedPrepNote(p);
     }
     render();
