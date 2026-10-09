@@ -372,6 +372,53 @@ li.big {
 .beat.big span { font-size: 28px; padding: 18px 4px; transition: background .08s, transform .08s; }
 .beat.big span.now { background: var(--text); color: var(--card); transform: scale(1.05); }
 .beat.big span.br.now { background: var(--lav-ink); }
+/* ---------- Run it: Scenario ---------- */
+.run-modes { display: flex; width: max-content; margin: 0 auto 14px; }
+.chip.on { background: var(--text); color: var(--card); border-color: var(--text); }
+.scen-pick { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-weight: 800; }
+.asks { display: grid; gap: 8px; margin: 10px 0 16px; }
+.ask { background: var(--soft); border-radius: 14px; }
+.ask-q { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 12px; font-size: 17px; font-weight: 800; text-align: left; cursor: pointer; color: var(--text); }
+.ask-n { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--title); color: var(--title-on); font-size: 14px; }
+.ask:not(.open) .ask-q::after { content: 'Ask'; margin-left: auto; font-size: 13px; color: var(--lav-ink); }
+.ask-a { padding: 0 12px 12px 50px; font-size: 16px; display: flex; flex-direction: column; gap: 6px; }
+.case-strip { font-weight: 800; color: var(--muted); font-size: 14px; }
+.monitor { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: #1b2530; color: #e8f1f5; border-radius: var(--radius); padding: 12px; }
+.mon { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mon small { font-size: 11px; font-weight: 800; color: #9fb3bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mon b { font-size: 28px; font-variant-numeric: tabular-nums; }
+.mon:first-child b { color: #7ee0a1; } .mon:nth-child(2) b { color: #8fd3ff; }
+.fio2-set { display: flex; align-items: center; gap: 4px; }
+.fio2-set b { font-size: 20px; min-width: 46px; text-align: center; }
+.fio2-set button { width: 26px; height: 26px; border-radius: 50%; border: 0; background: #34465a; color: #fff; font-weight: 800; cursor: pointer; }
+.monitor .look-text { grid-column: 1 / -1; margin: 4px 0 0; font-size: 15px; font-weight: 600; color: #e8f1f5; background: #26323f; border-radius: 10px; padding: 8px 10px; }
+.monitor .look-text b { color: #9fb3bf; margin-right: 6px; }
+.actions-panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.actions-panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 0 6px; }
+.actions-panel h3:first-child { margin-top: 0; }
+.act-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.act-row .btn { flex: 1 1 auto; }
+.btn.done { background: var(--soft); color: var(--muted); border-color: transparent; }
+.sopa .btn b { color: var(--lav-ink); margin-right: 2px; }
+.sopa .btn.done b { color: inherit; }
+.dose-form { background: var(--lav); border-radius: 14px; padding: 12px 14px; margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.toggle.off { opacity: .45; }
+.grade-row { display: flex; align-items: center; gap: 14px; margin: 6px 0 12px; }
+.grade { width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; font-size: 36px; font-weight: 800; background: var(--title); color: var(--title-on); }
+.grade.g-C, .grade.g-D { background: var(--peach); color: var(--text); } .grade.g-F { background: var(--danger); color: #fff; }
+.grade-row p { margin: 2px 0 0; }
+.case-story { background: var(--soft); border-radius: 12px; padding: 10px 12px; }
+.grade-list { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; }
+.grade-list li { display: flex; gap: 10px; align-items: flex-start; }
+.grade-list .gi { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+.grade-list .ok .gi { background: var(--title); color: var(--title-on); }
+.grade-list .no .gi { background: var(--peach); color: var(--peach-ink); }
+.grade-list small { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+@media (max-width: 560px) {
+  .monitor { grid-template-columns: repeat(2, 1fr); }
+  .run-clock { gap: 8px; }
+  .run-clock > div { padding: 6px 12px; }
+}
 .log { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 18px; }
 .log summary { font-weight: 800; cursor: pointer; }
 .log ol { list-style: none; padding: 0; margin: 8px 0 0; }

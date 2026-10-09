@@ -250,12 +250,12 @@
           ref: '',
           notes: 'All your notes in one place. Tap one to open it, tap again to close.',
           study: 'Each point is hidden. Say it out loud, then tap to check.',
-          run: 'Practice a code with live timers. Tap what the baby is doing.',
+          run: 'Scenario: the app plays the baby. Free run: you tap what the baby is doing.',
         }[flowMode]}</p>
       </div>
       <div id="flowBody"></div>`;
     $$('[data-mode]').forEach(b => b.onclick = () => { editMode = false; flowMode = b.dataset.mode; local.set('flowMode', flowMode); renderFlow(); });
-    if (flowMode === 'run') return renderRun($('#flowBody'));
+    if (flowMode === 'run') return renderRunArea($('#flowBody'));
     if (flowMode === 'notes') return renderNotesMode($('#flowBody'));
     renderCards($('#flowBody'));
   }
@@ -604,7 +604,7 @@
   const since = t => (now() - t) / 1000;
   function newRun() { return { start: null, step: 'ready', stepAt: now(), log: [], weight: 3, prep: [], epiAt: null, epiCount: 0, checks: [] }; }
   function logIt(text) { run.log.push([run.start ? Math.round(since(run.start)) : 0, text]); }
-  function go(step, text) { if (text) logIt(text); run.step = step; run.stepAt = now(); run.checks = []; saveRun(); renderRun($('#flowBody')); }
+  function go(step, text) { if (text) logIt(text); run.step = step; run.stepAt = now(); run.checks = []; saveRun(); renderRun($('#runBody')); }
   const dose = id => { const m = NRP.meds.find(x => x.id === id); return round2(run.weight * m.mlPerKg); };
   const epiSay = id => { const m = NRP.meds.find(x => x.id === id), ml = dose(id); return [fmtMg(ml * m.mgPerMl), fmt(ml)]; };  // [mg, mL]
   const spo2Now = () => {
@@ -719,7 +719,7 @@
     debrief: () => ({
       title: 'Debrief', phase: 'after',
       body: `<p>Total time <b>${run.start ? mmss(run.log.length ? run.log[run.log.length - 1][0] : 0) : '0:00'}</b>. What went well? What would you change?</p>`,
-      actions: [['Copy log', () => { navigator.clipboard?.writeText(run.log.map(([t, x]) => `${mmss(t)}  ${x}`).join('\n')); toast('Log copied'); }, ''], ['Run again', () => { run = newRun(); saveRun(); renderRun($('#flowBody')); }, 'primary']],
+      actions: [['Copy log', () => { navigator.clipboard?.writeText(run.log.map(([t, x]) => `${mmss(t)}  ${x}`).join('\n')); toast('Log copied'); }, ''], ['Run again', () => { run = newRun(); saveRun(); renderRun($('#runBody')); }, 'primary']],
     }),
   };
 
@@ -812,6 +812,437 @@
     fitTitles(host);
     update(); tick = setInterval(update, 250);
     anims.push(() => clearInterval(tick));
+  }
+
+  /* ---------- Run it: Scenario (the app plays the baby) ----------
+     Built from the NRP Scenario Builder: a level (lesson) picks the risk factors, gestation and
+     mode of birth, plus a hidden plan for what this baby needs. You only see what you check.
+     Time = real time since birth + any "Skip" seconds. */
+  let runMode = local.get('runMode', 'scenario');
+  let scen = local.get('scen', null);
+  let scenLevel = local.get('scenLevel', 'random');
+  const saveScen = () => local.set('scen', scen);
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const rint = (a, b) => Math.floor(rnd(a, b + 1));
+  const pickN = (arr, n) => [...arr].sort(() => Math.random() - 0.5).slice(0, n);
+  const B = () => NRP.builder;
+
+  function renderRunArea(host) {
+    host.innerHTML = `
+      <div class="seg run-modes">${[['scenario', 'Scenario'], ['free', 'Free run']].map(([k, l]) => `<button data-runmode="${k}" class="${runMode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div id="runBody"></div>`;
+    $$('[data-runmode]', host).forEach(b => b.onclick = () => { runMode = b.dataset.runmode; local.set('runMode', runMode); renderRunArea(host); });
+    runMode === 'scenario' ? renderScen($('#runBody')) : renderRun($('#runBody'));
+  }
+
+  // ---- Making a case ----
+  function makeScen(levelId) {
+    const levels = B().levels, lv = levelId === 'random' ? pick(levels) : levels.find(l => l.id === levelId);
+    const R = B().risks, preterm = lv.id === 'L8';
+    let risks = [];
+    const before = { L3: [], L4: R.L3, L5: [...R.L3, ...R.L4], L6: [...R.L3, ...R.L4, ...R.L5] };
+    if (lv.id === 'L3' || lv.id === 'OA') risks = Math.random() < 0.3 ? [] : pickN(R.L3, rint(1, 2));
+    else if (lv.id === 'L7') risks = [...pickN(R.L6, rint(1, 2)), ...R.L7];
+    else if (preterm) risks = pickN([...R.L3, ...R.L4, ...R.L5, ...R.L6].filter(r => !R.notPreterm.includes(r) && !r.startsWith('Gestational')), rint(1, 2));
+    else risks = [...pickN(before[lv.id], 1), ...pickN(R[lv.id], rint(1, 2))];
+    const volume = lv.id === 'L7' && Math.random() < 0.6;
+    if (volume) risks.push(pick(R.volume));
+    // Gestation: preterm 25–33 wks; "< 36 wks" risk → 34–35; otherwise term 37–41.
+    let gest = preterm ? rint(25, 33) : risks.includes('Gestational age < 36 0/7 weeks') ? rint(34, 35) : rint(37, 41);
+    if (gest < 37) risks = risks.filter(r => r !== 'Meconium-stained fluid');  // meconium only for term/post-term
+    const row = B().weights.find(([a, b]) => gest >= a && gest <= b) || B().weights[B().weights.length - 1];
+    const weight = round2(rnd(row[2], row[3]));
+    const fix = pick([null, 'M', 'R', 'S', 'O', 'P']);
+    const plan = { level: lv.id, hr0: 110, breath: 'apnea', fix: null, airway: false, obstruct: false, comp: false, epiNeed: 0, volume, needFiO2: 21, variant: '' };
+    if (lv.id === 'L3') {
+      plan.variant = pick(['vigorous', 'initial', 'cyanotic']);
+      if (plan.variant === 'vigorous') Object.assign(plan, { hr0: 150, breath: 'crying' });
+      if (plan.variant === 'cyanotic') plan.needFiO2 = 40;
+    }
+    if (lv.id === 'L4') Object.assign(plan, { hr0: 80, fix });
+    if (lv.id === 'L5') Object.assign(plan, { hr0: 70, airway: true });
+    if (lv.id === 'OA') Object.assign(plan, { hr0: 70, obstruct: true });
+    if (lv.id === 'L6') Object.assign(plan, { hr0: 50, fix, comp: true });
+    if (lv.id === 'L7') Object.assign(plan, { hr0: 30, fix, comp: true, epiNeed: rint(1, 2) });
+    if (lv.id === 'L8') {
+      plan.variant = pick(['labored', 'apnea']);
+      Object.assign(plan, { needFiO2: 35, hr0: plan.variant === 'labored' ? 120 : 90, breath: plan.variant === 'labored' ? 'labored' : 'apnea',
+        fix: plan.variant === 'apnea' ? pick([null, 'M', 'R']) : null });
+    }
+    return {
+      v: 1, level: lv.id, levelName: lv.name, birthMode: pick(lv.birth), gest, weight, fluid: risks.includes('Meconium-stained fluid') ? 'Meconium-stained' : 'Clear',
+      risks: risks.length ? risks : ['No apparent risk factors'], plan, stage: 'prebirth', asked: [], cord: null, brief: [],
+      t0: null, skip: 0, sim: 0, weighed: false, looked: false,
+      baby: { hr: plan.hr0, breath: plan.breath, spo2: 60, hr100: 0, breathAt: null },
+      s: { initial: null, wrap: null, ppv: false, ppvAt: null, ppvFirst: null, cpap: false, cpapAt: null, ffo2: false, pox: null, monitor: null, fio2: 21, fio2Start: null,
+        pip: 25, letters: [], lettersBeforeAirway: 0, airway: null, airwayAt: null, suction: null, comp: false, compAt: null, compFirst: null, effAtComp: 0,
+        line: null, epis: [], vols: [], effSecs: 0, compEff: 0, compHigh: 0, unlockAt: null, hrChecks: [], lookAt: null, form: null, endAt: null, routine: false },
+      log: [],
+    };
+  }
+
+  const simNow = () => scen.t0 ? (now() - scen.t0) / 1000 + scen.skip : 0;
+  function slog(text) { scen.log.push([Math.round(scen.sim), text]); }
+  const term = () => scen.gest >= 37;
+  const chestMoves = () => {
+    const p = scen.plan, s = scen.s;
+    if (p.obstruct) return !!(s.airway === 'ett' && s.suction);
+    if (p.airway) return !!s.airway;
+    if (p.fix) return !!s.airway || s.letters.includes(p.fix);
+    return true;
+  };
+  // Estimated weight = middle of the builder's range for the gestation, to one decimal.
+  const estWeight = () => { const r = B().weights.find(([a, b]) => scen.gest >= a && scen.gest <= b); return r ? Math.round((r[2] + r[3]) * 5) / 10 : 3; };
+  const spont = () => ['crying', 'breathing', 'labored'].includes(scen.baby.breath);
+
+  // ---- The baby, one simulated second at a time ----
+  function step1() {
+    const p = scen.plan, s = scen.s, b = scen.baby, t = scen.sim;
+    const eff = s.ppv && chestMoves();
+    if (eff) s.effSecs++;
+    if (s.comp) {
+      if (eff) s.compEff++;
+      if (b.hr >= 60) s.compHigh++;
+      if (s.fio2 < 100) s.lowO2Comp = (s.lowO2Comp || 0) + 1;  // a short grace period to turn it up
+      if (s.monitor == null) s.noMonComp = (s.noMonComp || 0) + 1;
+    }
+    // Initial steps start a baby who only needed stimulation.
+    if (p.level === 'L3' && p.variant !== 'vigorous' && s.initial != null && b.breath === 'apnea' && t - s.initial >= 5)
+      b.breath = p.variant === 'cyanotic' ? 'labored' : 'crying';
+    if (p.level === 'L8' && p.variant === 'labored' && s.cpap && t - s.cpapAt > 60) b.breath = 'breathing';
+    let target = b.hr, rate = 0;
+    if (spont()) { target = p.variant === 'cyanotic' || b.breath === 'labored' ? 135 : 150; rate = 3; }
+    else if (eff) {
+      let ok = s.effSecs >= 15;
+      if (p.comp) ok = s.compEff >= 45;
+      if (p.epiNeed) {
+        const lastNeeded = Math.max(s.epis[p.epiNeed - 1]?.t ?? Infinity, p.volume ? (s.vols[0]?.t ?? Infinity) : 0);
+        ok = ok && s.epis.length >= p.epiNeed && (!p.volume || s.vols.length) && t - lastNeeded >= 45;
+      }
+      if (ok) { s.unlockAt ??= t; target = 150; rate = 2; } else { target = p.hr0; rate = 1; }
+    } else if (t > (p.level === 'L3' ? 30 : 10)) { target = p.comp ? 20 : 60; rate = 0.4; }  // no help → HR drifts down
+    b.hr += Math.sign(target - b.hr) * Math.min(Math.abs(target - b.hr), rate);
+    // Breathing comes back once the HR has been ≥ 100 for a while with good ventilation.
+    if (!spont() && eff && b.hr >= 100) {
+      b.hr100++;
+      if (b.hr100 >= 20 && b.breath === 'apnea') b.breath = 'gasping';
+      if (b.hr100 >= 35) b.breath = 'breathing';
+    }
+    // SpO2 tracks the target band when breathing/ventilated well; FiO2 nudges it.
+    const band = spo2Band(Math.max(t, 120)), mid = (band[0] + band[1]) / 2;
+    const fio2 = s.ppv || s.cpap || s.ffo2 ? s.fio2 : 21;
+    let goal = (spont() || eff) && b.hr >= 80 ? mid + (fio2 - p.needFiO2) * 0.6 : 50;
+    if (t < 120) goal -= 8;
+    goal = Math.max(40, Math.min(100, goal));
+    b.spo2 += (goal - b.spo2) * 0.08;
+  }
+  const spo2Band = t => { const r = [...NRP.spo2].reverse().find(r => t / 60 >= parseInt(r[0])) || NRP.spo2[0]; return [r[1], r[2]]; };
+  function advance() {
+    if (!scen || scen.stage !== 'code') return;
+    const to = simNow();
+    while (scen.sim + 1 <= to) { scen.sim++; step1(); }
+  }
+
+  // ---- Screens ----
+  let scenTick = null;
+  function renderScen(host) {
+    clearInterval(scenTick);
+    if (!scen || scen.v !== 1) { scen = makeScen(scenLevel); saveScen(); }
+    if (scen.stage === 'prebirth') return renderPrebirth(host);
+    if (scen.stage === 'debrief') return renderScenDebrief(host);
+    advance();
+    renderCode(host);
+  }
+
+  const QUESTIONS = [['gest', 'Gestation?'], ['fluid', 'Amniotic fluid clear?'], ['risks', 'Additional risk factors?'], ['cord', 'Umbilical cord management plan?']];
+  const CORD = ['Deferred clamping (≥ 60 sec) if vigorous', 'Intact cord milking', 'Immediate clamping'];
+  function renderPrebirth(host) {
+    const lv = B().levels.find(l => l.id === scen.level);
+    const answer = k => k === 'gest' ? `${scen.gest} weeks` : k === 'fluid' ? scen.fluid : k === 'risks' ? scen.risks.join(' · ') : '';
+    const brief = ['Team briefing · roles assigned', 'Equipment check: warmer, suction, PPV device, O₂ blender, pulse ox, ETT + laryngeal mask, UVC kit',
+      ...(scen.plan.level === 'L8' ? ['Plastic bag/wrap + thermal mattress ready'] : [])];
+    host.innerHTML = `
+      <div class="scen-pick">
+        <span>Level</span>
+        <div class="chips">${[['random', 'Random'], ...B().levels.map(l => [l.id, l.name])].map(([k, n]) => `<button class="chip${scenLevel === k ? ' on' : ''}" data-level="${k}">${n}</button>`).join('')}</div>
+      </div>
+      <section class="run-step ph-prep">
+        <h2><span class="pill">${scenLevel === 'random' ? 'Random case' : esc(lv.name)}</span></h2>
+        <p class="small">${esc(scen.birthMode)}. Ask the 4 pre-birth questions. Tap each one to hear the answer.</p>
+        <div class="asks">${QUESTIONS.map(([k, q], i) => {
+          const open = scen.asked.includes(k);
+          return `<div class="ask${open ? ' open' : ''}"><button class="ask-q" data-ask="${k}"><span class="ask-n">${i + 1}</span>${q}</button>
+            ${open ? k === 'cord' ? `<div class="ask-a"><span class="small">Plan with the obstetric provider:</span><div class="chips">${CORD.map(c => `<button class="chip${scen.cord === c ? ' on' : ''}" data-cord="${esc(c)}">${c}</button>`).join('')}</div></div>`
+              : `<div class="ask-a">${esc(answer(k))}</div>` : ''}</div>`;
+        }).join('')}</div>
+        <h3 class="sub">Before the birth</h3>
+        <ul class="checks">${brief.map((l, i) => `<li><button class="check${scen.brief.includes(i) ? ' on' : ''}" data-brief="${i}"><span class="box"></span><span>${esc(l)}</span></button></li>`).join('')}</ul>
+        <div class="run-actions"><button class="btn primary" data-born>Baby is born · start the clock</button></div>
+      </section>`;
+    host.onclick = e => {
+      const t = e.target;
+      const lvb = t.closest('[data-level]');
+      if (lvb) { scenLevel = lvb.dataset.level; local.set('scenLevel', scenLevel); scen = makeScen(scenLevel); saveScen(); return renderScen(host); }
+      const a = t.closest('[data-ask]'); if (a) { if (!scen.asked.includes(a.dataset.ask)) scen.asked.push(a.dataset.ask); saveScen(); return renderScen(host); }
+      const c = t.closest('[data-cord]'); if (c) { scen.cord = c.dataset.cord; saveScen(); return renderScen(host); }
+      const bf = t.closest('[data-brief]');
+      if (bf) { const i = +bf.dataset.brief; scen.brief.includes(i) ? scen.brief.splice(scen.brief.indexOf(i), 1) : scen.brief.push(i); bf.classList.toggle('on'); saveScen(); return; }
+      if (t.closest('[data-born]')) {
+        if (runSound) sound.unlock();
+        scen.briefN = brief.length; scen.stage = 'code'; scen.t0 = now(); scen.sim = 0;
+        slog(`Birth · ${scen.gest} wks · ${scen.birthMode}`); if (scen.cord) slog(`Cord plan: ${scen.cord}`);
+        saveScen(); renderScen(host);
+      }
+    };
+  }
+
+  // What you see when you look at the baby.
+  function lookText() {
+    const b = scen.baby, s = scen.s;
+    const breath = { apnea: 'not breathing', gasping: 'gasping', labored: 'breathing, but labored', crying: 'crying', breathing: 'breathing on own' }[b.breath];
+    const tone = b.hr >= 100 && spont() ? 'good tone' : b.hr >= 60 ? 'some tone' : 'limp';
+    const color = b.spo2 >= 80 ? 'pink' : b.spo2 >= 65 ? 'dusky' : 'blue';
+    const chest = s.ppv ? (chestMoves() ? 'chest moving with each breath' : 'NO chest movement with breaths') : '';
+    return [breath, tone, color, chest].filter(Boolean).join(' · ');
+  }
+  const FIO2_STEPS = [21, 30, 40, 50, 60, 80, 100];
+
+  function renderCode(host) {
+    const s = scen.s, b = scen.baby, w = scen.weighed ? `${fmt(scen.weight)} kg` : '? kg';
+    const btn = (act, label, cls = '', extra = '') => `<button class="btn ${cls || 'ghost'} small" data-sa="${act}" ${extra}>${label}</button>`;
+    const on = x => x ? 'primary on' : '';
+    const hrShown = s.monitor ? Math.round(b.hr) : s.hrChecks.length ? `${s.hrChecks[s.hrChecks.length - 1][1]}` : '?';
+    host.innerHTML = `
+      <div class="run">
+        <div class="run-clock">
+          <div><small>Since birth</small><b data-sclock>${mmss(scen.sim)}</b></div>
+          <button class="btn ghost small" data-sa="skip15">+15 s</button><button class="btn ghost small" data-sa="skip30">+30 s</button>
+          <button class="icon-btn" data-sa="sound" aria-label="${runSound ? 'Sound on' : 'Sound off'}" title="${runSound ? 'Sound on' : 'Sound off'}">${runSound ? icons.soundOn : icons.soundOff}</button>
+          <button class="btn ghost small" data-sa="new">New case</button>
+        </div>
+        <div class="case-strip">${scen.gest} wks · ${esc(scen.fluid.toLowerCase())} fluid · ${w}${s.airway ? ` · ${s.airway === 'ett' ? 'intubated' : 'laryngeal mask'}` : ''}${s.line ? ` · ${s.line.toUpperCase()} in` : ''}</div>
+        <section class="monitor">
+          <div class="mon"><small>HR${s.monitor ? ' · monitor' : s.hrChecks.length ? ` · at ${mmss(s.hrChecks[s.hrChecks.length - 1][0])}` : ''}</small><b data-mhr>${hrShown}</b></div>
+          <div class="mon"><small>SpO₂ <span data-mtarget>${s.pox != null ? scen.sim >= 120 ? `· target ${spo2Band(scen.sim).join('–')}%` : '· no target yet' : ''}</span></small><b data-mspo2>${s.pox != null && scen.sim - s.pox >= 10 ? `${Math.round(b.spo2)}%` : s.pox != null ? '…' : '–'}</b></div>
+          <div class="mon"><small>FiO₂</small><div class="fio2-set"><button data-sa="fio2-" aria-label="Lower FiO2">−</button><b>${s.fio2}%</b><button data-sa="fio2+" aria-label="Raise FiO2">+</button></div></div>
+          <div class="mon"><small>PIP / PEEP</small><b>${s.pip}/5</b></div>
+          <p class="look-text" data-look>${s.lookAt != null ? `<b>${mmss(s.lookAt)}</b> ${esc(scen.lookCache)}` : 'Tap “Look at baby” for the rapid evaluation.'}</p>
+        </section>
+        <section class="actions-panel">
+          <h3>Assess</h3>
+          <div class="act-row">${btn('look', 'Look at baby')}${btn('hr', 'Check HR')}${btn('pox', s.pox != null ? 'Pulse ox on' : 'Pulse ox', s.pox != null ? 'done' : '')}${btn('monitor', s.monitor != null ? 'Monitor on' : 'Cardiac monitor', s.monitor != null ? 'done' : '')}${btn('weigh', scen.weighed ? `Weighed ${fmt(scen.weight)} kg` : 'Weigh on warmer', scen.weighed ? 'done' : '')}</div>
+          <h3>Airway + breathing</h3>
+          <div class="act-row">${btn('routine', 'Routine care · skin to skin')}${btn('initial', s.initial != null ? 'Initial steps done' : 'Initial steps', s.initial != null ? 'done' : '')}${scen.plan.level === 'L8' ? btn('wrap', s.wrap != null ? 'Wrapped' : 'Plastic bag/wrap', s.wrap != null ? 'done' : '') : ''}
+            ${btn('ffo2', s.ffo2 ? 'Free-flow O₂ on' : 'Free-flow O₂', on(s.ffo2))}${btn('cpap', s.cpap ? 'CPAP on' : 'CPAP', on(s.cpap))}${btn('ppv', s.ppv ? 'PPV on · stop' : 'Start PPV', on(s.ppv))}</div>
+          ${s.ppv || s.letters.length || s.airway ? `<h3>MR. SOPA</h3>
+          <div class="act-row sopa">${[['M', 'Mask'], ['R', 'Reposition'], ['S', 'Suction'], ['O', 'Open mouth'], ['P', 'Pressure ↑ 5']].map(([k, n]) => btn('L' + k, `<b>${k}</b> ${n}`, s.letters.includes(k) ? 'done' : '')).join('')}
+            ${btn('ett', s.airway === 'ett' ? '<b>A</b> Intubated' : '<b>A</b> Intubate', s.airway === 'ett' ? 'done' : '')}${btn('lma', s.airway === 'lma' ? '<b>A</b> Laryngeal mask in' : '<b>A</b> Laryngeal mask', s.airway === 'lma' ? 'done' : '')}</div>` : ''}
+          <h3>Circulation</h3>
+          <div class="act-row">${btn('comp', s.comp ? 'Compressions on · stop' : 'Start compressions', s.comp ? 'danger on' : '')}${btn('uvc', s.line === 'uvc' ? 'UVC in' : 'UVC', s.line === 'uvc' ? 'done' : '')}${btn('io', s.line === 'io' ? 'IO in' : 'IO', s.line === 'io' ? 'done' : '')}${btn('epi', 'Epinephrine')}${btn('vol', 'Volume')}</div>
+          ${s.form ? doseForm(s.form) : ''}
+          ${s.comp ? beat() : ''}
+          <div class="run-actions"><button class="btn primary" data-sa="end">${scen.baby.hr >= 100 && spont() ? 'Post-resuscitation care · debrief' : 'End + debrief'}</button></div>
+        </section>
+        ${scen.log.length ? `<details class="log"><summary>Event log (${scen.log.length})</summary><ol>${scen.log.map(([t, x]) => `<li><time>${mmss(t)}</time>${esc(x)}</li>`).join('')}</ol></details>` : ''}
+      </div>`;
+    host.onclick = e => scenAction(e, host);
+    host.onsubmit = e => { e.preventDefault(); giveDose(host); };
+    const tickFn = () => {
+      if (!document.body.contains(host)) return clearInterval(scenTick);
+      const before = scen.sim; advance();
+      $('[data-sclock]', host).textContent = mmss(scen.sim);
+      if (s.monitor != null) $('[data-mhr]', host).textContent = Math.round(scen.baby.hr);
+      const sp = $('[data-mspo2]', host); if (sp && s.pox != null) sp.textContent = scen.sim - s.pox >= 10 ? `${Math.round(scen.baby.spo2)}%` : '…';
+      const tg = $('[data-mtarget]', host); if (tg && s.pox != null) tg.textContent = scen.sim >= 120 ? `· target ${spo2Band(scen.sim).join('–')}%` : '· no target yet';
+      // Chimes: check HR 15 s into PPV and 60 s into compressions; epi at 3 + 5 min.
+      if (s.ppvFirst != null) cue(`s${scen.t0}ppv`, s.ppvFirst + 15 - scen.sim, 'check');
+      if (s.compAt != null && s.comp) cue(`s${scen.t0}c${s.compAt}`, s.compAt + 60 - scen.sim, 'check');
+      const le = s.epis[s.epis.length - 1];
+      if (le && s.comp) { cue(`s${scen.t0}e${le.t}:180`, le.t + 180 - scen.sim, 'epi'); cue(`s${scen.t0}e${le.t}:300`, le.t + 300 - scen.sim, 'epiDue'); }
+      if (scen.sim !== before && scen.sim % 5 === 0) saveScen();
+    };
+    tickFn(); scenTick = setInterval(tickFn, 250);
+    anims.push(() => clearInterval(scenTick));
+  }
+
+  function doseForm(kind) {
+    const s = scen.s, estKg = estWeight();
+    const wLine = scen.weighed ? `Weight on the warmer: <b>${fmt(scen.weight)} kg</b>` : `Not weighed yet. Estimate for ${scen.gest} wks ≈ <b>${fmt(estKg)} kg</b> (or weigh first).`;
+    if (kind === 'vol') return `<form class="dose-form"><p class="small">${wLine}</p>
+      <div class="answer say"><span class="say-lead">The dose is</span><input type="text" inputmode="decimal" autocomplete="off" placeholder="mL" data-dml><span class="say-unit">mL</span></div>
+      <div class="chips"><label class="toggle"><input type="radio" name="vt" value="NS" checked> Normal saline</label><label class="toggle"><input type="radio" name="vt" value="O-neg blood"> O-neg blood</label></div>
+      <div class="row-end"><button type="button" class="btn ghost small" data-sa="formclose">Cancel</button><button class="btn primary small">Give over 5–10 min</button></div></form>`;
+    const ivOk = !!s.line, etOk = s.airway === 'ett';
+    return `<form class="dose-form"><p class="small">${wLine}</p>
+      <div class="chips">${[['iv', 'IV/IO', ivOk, 'Place a UVC or IO first'], ['et', 'ET', etOk, 'Intubate first']].map(([k, n, ok, why], i) =>
+        `<label class="toggle${ok ? '' : ' off'}" title="${ok ? '' : why}"><input type="radio" name="route" value="${k}" ${ok ? '' : 'disabled'} ${ok && (i === 0 || !ivOk) ? 'checked' : ''}> ${n}</label>`).join('')}</div>
+      ${!ivOk && !etOk ? '<p class="small">No route yet: place a UVC/IO, or intubate for ET epi.</p>' : `
+      <div class="answer say"><span class="say-lead">The dose is</span><input type="text" inputmode="decimal" autocomplete="off" placeholder="mg" data-dmg><span class="say-unit">mg,</span>
+        <span class="say-lead">which is</span><input type="text" inputmode="decimal" autocomplete="off" placeholder="mL" data-dml><span class="say-unit">mL.</span></div>
+      <label class="toggle"><input type="checkbox" data-flush> Flush with 3 mL NS (IV/IO)</label>`}
+      <div class="row-end"><button type="button" class="btn ghost small" data-sa="formclose">Cancel</button>${ivOk || etOk ? '<button class="btn primary small">Give epi</button>' : ''}</div></form>`;
+  }
+
+  function giveDose(host) {
+    const s = scen.s, f = $('.dose-form', host); if (!f) return;
+    advance();
+    const w = scen.weighed ? scen.weight : estWeight();
+    const num = sel => { const v = parseFloat(($(sel, f)?.value || '').replace(/[^\d.]/g, '')); return isNaN(v) ? null : v; };
+    const near = (v, a, tol) => v != null && Math.abs(v - a) <= Math.max(tol, a * 0.05);
+    if (s.form === 'vol') {
+      const ml = num('[data-dml]'); if (ml == null) return toast('Type the mL');
+      const kind = $('input[name=vt]:checked', f).value, ok = near(ml, w * 10, 0.5);
+      s.vols.push({ t: scen.sim, ml, ok, kind }); slog(`Volume: ${kind} ${fmt(ml)} mL${ok ? '' : ` (10 mL/kg = ${fmt(w * 10)} mL)`}`);
+    } else {
+      const route = $('input[name=route]:checked', f)?.value; if (!route) return;
+      const med = NRP.meds.find(m => m.id === (route === 'iv' ? 'epiIV' : 'epiET'));
+      const mg = num('[data-dmg]'), ml = num('[data-dml]'); if (mg == null || ml == null) return toast('Say both: mg and mL');
+      const aMl = w * med.mlPerKg, aMg = aMl * med.mgPerMl, ok = near(mg, aMg, 0.0011) && near(ml, aMl, 0.011);
+      const flush = route === 'iv' && $('[data-flush]', f).checked;
+      s.epis.push({ t: scen.sim, route, mg, ml, ok, flush });
+      slog(`Epi ${route === 'iv' ? 'IV/IO' : 'ET'}: ${fmtMg(mg)} mg (${fmt(ml)} mL)${flush ? ' + 3 mL NS flush' : ''}${ok ? '' : ` · correct: ${fmtMg(aMg)} mg (${fmt(aMl)} mL)`}`);
+    }
+    s.form = null; saveScen(); renderScen(host);
+  }
+
+  function scenAction(e, host) {
+    const a = e.target.closest('[data-sa]')?.dataset.sa; if (!a) return;
+    if (runSound) sound.unlock();
+    advance();
+    const s = scen.s, t = scen.sim, b = scen.baby;
+    const set = (k, v, text) => { if (s[k] == null) { s[k] = v; if (text) slog(text); } };
+    switch (a) {
+      case 'skip15': case 'skip30': scen.skip += a === 'skip15' ? 15 : 30; advance(); slog(`(skipped ${a.slice(4)} s)`); break;
+      case 'sound': runSound = !runSound; local.set('runSound', runSound); break;
+      case 'new': scen = makeScen(scenLevel); break;
+      case 'look': s.lookAt = t; scen.lookCache = lookText(); if (!scen.looked) { scen.looked = true; scen.lookFirst = t; } slog(`Looked: ${scen.lookCache}`); break;
+      case 'hr': { const hr = Math.round(b.hr / 6) * 6; s.hrChecks.push([t, hr]); slog(`HR check: ${hr}`); break; }
+      case 'pox': set('pox', t, 'Pulse oximeter on (right hand)'); break;
+      case 'monitor': set('monitor', t, 'Cardiac monitor on'); break;
+      case 'weigh': if (!scen.weighed) { scen.weighed = true; slog(`Weighed on warmer: ${fmt(scen.weight)} kg`); } break;
+      case 'routine': s.routine = true; s.endAt = t; slog('Routine care · skin to skin'); scen.stage = 'debrief'; break;
+      case 'initial': set('initial', t, 'Initial steps: warm, dry, position, stimulate, clear airway if needed'); break;
+      case 'wrap': set('wrap', t, 'Plastic bag/wrap + thermal mattress'); break;
+      case 'ffo2': s.ffo2 = !s.ffo2; slog(s.ffo2 ? `Free-flow O₂ at ${s.fio2}%` : 'Free-flow O₂ off'); break;
+      case 'cpap': s.cpap = !s.cpap; if (s.cpap) { s.cpapAt ??= t; s.fio2Start ??= s.fio2; } slog(s.cpap ? `CPAP (PEEP 5), FiO₂ ${s.fio2}%` : 'CPAP off'); break;
+      case 'ppv':
+        s.ppv = !s.ppv;
+        if (s.ppv) { s.ppvAt = t; s.ppvFirst ??= t; s.fio2Start ??= s.fio2; slog(`PPV started · ${s.pip}/5 · FiO₂ ${s.fio2}%`); } else slog('PPV stopped');
+        break;
+      case 'fio2-': case 'fio2+': {
+        s.fio2 = a === 'fio2+' ? FIO2_STEPS.find(v => v > s.fio2) ?? 100 : [...FIO2_STEPS].reverse().find(v => v < s.fio2) ?? 21;
+        slog(`FiO₂ ${s.fio2}%`); break;
+      }
+      case 'LM': case 'LR': case 'LS': case 'LO': case 'LP': {
+        const k = a[1];
+        if (k === 'S' && s.airway === 'ett') { set('suction', t, 'Suctioned through the ETT'); break; }
+        if (k === 'P') { const max = scen.gest < 32 ? 30 : 40; if (s.pip >= max) { toast(`Max PIP ${max}`); break; } s.pip += 5; }
+        if (!s.letters.includes(k) || k === 'P') { if (!s.letters.includes(k)) s.letters.push(k); if (!s.airway) s.lettersBeforeAirway++; }
+        slog({ M: 'M: mask adjusted', R: 'R: head repositioned', S: 'S: mouth + nose suctioned', O: 'O: mouth opened', P: `P: pressure up to ${s.pip}/5` }[k]);
+        break;
+      }
+      case 'ett': case 'lma':
+        if (!s.airway) { s.airway = a; s.airwayAt = t; slog(a === 'ett' ? 'A: intubated' : 'A: laryngeal mask placed'); }
+        break;
+      case 'comp':
+        s.comp = !s.comp;
+        if (s.comp) { s.compAt = t; s.compFirst ??= t; s.effAtComp = s.effAtComp || s.effSecs; slog(`Compressions started (3:1)${s.fio2 < 100 ? ` · FiO₂ still ${s.fio2}%` : ''}`); } else slog('Compressions stopped');
+        break;
+      case 'uvc': case 'io': if (!s.line) { s.line = a; slog(a === 'uvc' ? 'UVC placed' : 'IO placed'); } break;
+      case 'epi': case 'vol': s.form = s.form === a ? null : a; break;
+      case 'formclose': s.form = null; break;
+      case 'end': s.endAt = t; slog(b.hr >= 100 && spont() ? 'Post-resuscitation care' : 'Ended'); scen.stage = 'debrief'; break;
+    }
+    saveScen(); renderScen(host);
+  }
+
+  // ---- Debrief: what went well (✓) and what to consider, plus a letter grade ----
+  function gradeScen() {
+    const p = scen.plan, s = scen.s, items = [];
+    const add = (label, ok, note, weight = 1) => items.push({ label, ok: !!ok, note, weight });
+    const needsVent = !['vigorous', 'initial', 'cyanotic', 'labored'].includes(p.variant);
+    add('Asked all 4 pre-birth questions', scen.asked.length === 4, 'Gestation? Fluid clear? Risk factors? Cord plan?');
+    add('Team briefing + equipment check', scen.brief.length >= (scen.briefN || 2), 'Brief the team and check equipment before every birth.');
+    const firstAct = Math.min(...[s.initial, s.ppvFirst, s.cpapAt, s.routine ? s.endAt : null].filter(v => v != null), Infinity);
+    add('Rapid evaluation first (term? tone? breathing?)', scen.looked && scen.lookFirst <= firstAct, 'Look at the baby before you act.');
+    if (scen.cord === 'Intact cord milking' && scen.gest < 28) add('Cord plan fits the gestation', false, 'Cord milking is not recommended < 28 wks (risk of severe IVH).');
+    if (scen.cord === 'Intact cord milking' && scen.gest >= 28 && scen.gest < 35) add('Cord plan fits the gestation', false, 'Not enough evidence to recommend routine cord milking at 28–34 wks.');
+    if (p.variant === 'vigorous') add('Vigorous baby → routine care, no extra interventions', s.routine && s.ppvFirst == null && s.cpapAt == null, 'Term, good tone, crying = skin to skin with the parent.', 2);
+    else add('Initial steps done', s.initial != null && (s.ppvFirst == null || s.initial <= s.ppvFirst + 5), 'Warm, dry, position, stimulate, clear airway if needed.');
+    if (p.level === 'L8') add('Preterm warmth: plastic bag/wrap', s.wrap != null && s.wrap <= 60, 'Use extra thermoregulation for preterm babies.');
+    if (needsVent) {
+      add('Ventilation started within 60 sec', s.ppvFirst != null && s.ppvFirst <= 60, 'Apnea/gasping or HR < 100 → ventilate within the golden minute.', 2);
+      add('HR checked 15–30 sec after starting PPV', s.ppvFirst != null && (s.hrChecks.some(([t]) => t >= s.ppvFirst && t <= s.ppvFirst + 35) || (s.monitor != null && s.monitor <= s.ppvFirst + 35)), 'Is the HR rising? If not, look for chest movement.');
+      add('Pulse oximeter on', s.pox != null, 'Ventilating → pulse oximeter (right hand).');
+    }
+    if (p.variant === 'cyanotic' || p.variant === 'labored') {
+      add('Pulse ox for labored breathing / cyanosis', s.pox != null, 'Pulse oximeter, O₂ if needed, consider CPAP.');
+      add('Support with O₂ / CPAP', s.cpap || s.ffo2, 'Labored or cyanotic → O₂ if needed, consider CPAP.');
+    }
+    if (p.fix || p.airway || p.obstruct) add('MR. SOPA tried when the chest didn’t move', s.lettersBeforeAirway > 0 || (p.fix && s.letters.includes(p.fix)), 'No chest movement → corrective steps.');
+    if (p.airway || p.obstruct) add('Alternative airway placed', !!s.airway, 'Still no chest movement → intubate or laryngeal mask.', 2);
+    if (p.obstruct) add('Suctioned through the ETT', !!s.suction, 'Obstructed airway: intubate + suction (catheter or meconium aspirator).', 2);
+    if (p.comp) {
+      add('30 sec of effective ventilation before compressions', s.compFirst != null && s.effAtComp >= 30, 'Compressions only after 30 sec of ventilation that moves the chest.', 2);
+      add('Airway (ETT / laryngeal mask) with compressions', s.airway && s.airwayAt <= (s.compFirst ?? Infinity) + 30, 'Intubate or laryngeal mask when compressions start.');
+      add('FiO₂ 100% during compressions', s.compFirst != null && (s.lowO2Comp || 0) <= 15, 'Compressions → 100% oxygen.');
+      add('Cardiac monitor during compressions', s.compFirst != null && (s.noMonComp || 0) <= 30, 'Compressions → cardiac monitor.');
+    }
+    if (!p.comp && s.compFirst != null) add('Compressions only when HR < 60', false, 'This baby didn’t need compressions.', 2);
+    else if (p.comp && s.compHigh > 15) add('Stopped compressions once HR ≥ 60', false, 'HR ≥ 60 → stop compressions, keep ventilating.');
+    if (p.epiNeed) {
+      add('UVC or IO placed', !!s.line, 'Compressions → UVC or IO.');
+      add('Epi dose right (mg and mL)', s.epis.length && s.epis.every(e => e.ok), 'IV/IO 0.02 mg/kg = 0.2 mL/kg · ET 0.1 mg/kg = 1 mL/kg (1:10,000).', 2);
+      if (s.epis.some(e => e.route === 'iv')) add('Flushed IV/IO epi with 3 mL NS', s.epis.filter(e => e.route === 'iv').every(e => e.flush), 'Flush 3 mL NS after each IV/IO dose.');
+      if (s.epis.length > 1) add('Epi repeated every 3–5 min', s.epis.every((e, i) => !i || e.t - s.epis[i - 1].t >= 175), 'Not sooner than 3 min apart.');
+    }
+    if (p.volume) add('Volume given for blood loss (10 mL/kg)', s.vols.length && s.vols.every(v => v.ok), 'Bleeding risk + no response → NS or O-neg blood 10 mL/kg over 5–10 min.', 2);
+    if (s.fio2Start != null) {
+      const want = scen.gest >= 35 ? [21, 21] : scen.gest >= 32 ? [21, 30] : [30, 100];
+      add(`Starting FiO₂ right for ${scen.gest} wks`, s.fio2Start >= want[0] && s.fio2Start <= want[1], '≥ 35 wks 21% · 32–34 wks 21–30% · < 32 wks ≥ 30%.');
+    }
+    if (s.airway === 'lma' && scen.weight < 2) add('Laryngeal mask only if > ~2 kg', false, 'Under about 2 kg, intubate instead.');
+    if (s.pox != null && scen.sim >= 150) { const [lo, hi] = spo2Band(scen.sim), v = Math.round(scen.baby.spo2); add('SpO₂ in the target range at the end', v >= lo - 3 && v <= hi + 5, `Target now ${lo}–${hi}%. Adjust FiO₂ to the table.`); }
+    add('Baby stable when you finished', s.routine ? scen.plan.variant === 'vigorous' || spont() : scen.baby.hr >= 100 && spont(), 'End with HR ≥ 100 and the baby breathing.', 2);
+    const tot = items.reduce((n, i) => n + i.weight, 0), got = items.reduce((n, i) => n + (i.ok ? i.weight : 0), 0), pct = tot ? got / tot * 100 : 100;
+    const grade = pct >= 90 ? 'A' : pct >= 80 ? 'B' : pct >= 70 ? 'C' : pct >= 60 ? 'D' : 'F';
+    return { items, grade, pct: Math.round(pct) };
+  }
+
+  function caseStory() {
+    const p = scen.plan;
+    const o2 = scen.gest >= 35 ? '21%' : scen.gest >= 32 ? '21–30%' : '≥ 30%';
+    const fixName = { M: 'adjusting the mask', R: 'repositioning the head', S: 'suctioning mouth + nose', O: 'opening the mouth', P: 'raising the pressure' }[p.fix];
+    return {
+      L3: { vigorous: 'Vigorous term baby: routine care, skin to skin with the parent.', initial: 'Needed initial steps only: stimulation got the baby crying.', cyanotic: 'Breathing but labored and cyanotic after initial steps: pulse ox, O₂ ± CPAP.' }[p.variant],
+      L4: `Apneic, HR ${p.hr0}. Needed ventilation${p.fix ? `; the chest only moved after ${fixName}` : '; the chest moved right away'}.`,
+      L5: `Apneic, HR ${p.hr0}. Mask ventilation never moved the chest: needed an alternative airway (intubation or laryngeal mask).`,
+      OA: `Apneic, HR ${p.hr0}. Airway obstructed (blood, debris, vernix${term() ? ' or meconium' : ''}): no chest movement until intubated and suctioned.`,
+      L6: `HR ${p.hr0} even with good ventilation${p.fix ? ` (chest moved after ${fixName})` : ''}: needed compressions with 100% O₂ and an airway.`,
+      L7: `HR ${p.hr0}: needed compressions, ${p.epiNeed} dose${p.epiNeed > 1 ? 's' : ''} of epi${p.volume ? ' and volume for blood loss' : ''}.`,
+      L8: p.variant === 'labored' ? `Preterm ${scen.gest} wks, breathing but labored: warmth, CPAP and starting FiO₂ ${o2}.`
+        : `Preterm ${scen.gest} wks, apneic: warmth, then ventilation (PIP ${scen.gest < 32 ? '20–25' : '25–30'}) with starting FiO₂ ${o2}${p.fix ? `; chest moved after ${fixName}` : ''}.`,
+    }[p.level];
+  }
+
+  function renderScenDebrief(host) {
+    const g = gradeScen();
+    host.innerHTML = `
+      <div class="run">
+        <section class="run-step ph-after">
+          <h2><span class="pill">Debrief</span></h2>
+          <div class="grade-row"><span class="grade g-${g.grade}">${g.grade}</span><div><b>${g.pct}%</b><p class="small">${scen.gest} wks · ${esc(scen.levelName)} · ${mmss(scen.s.endAt ?? scen.sim)} total</p></div></div>
+          <p class="case-story"><b>The case:</b> ${esc(caseStory())}</p>
+          <ul class="grade-list">${g.items.map(i => `<li class="${i.ok ? 'ok' : 'no'}"><span class="gi">${i.ok ? '✓' : '!'}</span><div><b>${esc(i.label)}</b>${i.ok ? '' : `<small>Consider: ${esc(i.note)}</small>`}</div></li>`).join('')}</ul>
+          <p class="small">What went well? What would you change?</p>
+          <div class="run-actions"><button class="btn ghost" data-copy>Copy log</button><button class="btn primary" data-again>New case</button></div>
+        </section>
+        <details class="log" open><summary>Event log (${scen.log.length})</summary><ol>${scen.log.map(([t, x]) => `<li><time>${mmss(t)}</time>${esc(x)}</li>`).join('')}</ol></details>
+      </div>`;
+    host.onclick = e => {
+      if (e.target.closest('[data-copy]')) { navigator.clipboard?.writeText(scen.log.map(([t, x]) => `${mmss(t)}  ${x}`).join('\n')); toast('Log copied'); }
+      if (e.target.closest('[data-again]')) { scen = makeScen(scenLevel); saveScen(); renderScen(host); }
+    };
   }
 
   /* ================= Med math ================= */

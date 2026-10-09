@@ -167,4 +167,31 @@ const NRP = {
     ['35–37 wks', '1,900–2,400 g', '8.0 cm', '3.0–3.5'], ['38–40 wks', '2,500–3,100 g', '8.5 cm', '3.5'],
     ['41–43 wks', '3,200–4,200 g', '9.0 cm', '3.5'],
   ],
+
+  // Run it scenarios, from the NRP Scenario Builder (9th edition).
+  builder: {
+    // [from wks, to wks, from kg, to kg]: approximate weight for gestation
+    weights: [[23, 24, 0.5, 0.6], [25, 26, 0.7, 0.8], [27, 29, 0.9, 1.0], [30, 32, 1.1, 1.4], [33, 34, 1.5, 1.8],
+      [35, 37, 1.9, 2.4], [38, 40, 2.5, 3.1], [41, 43, 3.2, 4.2]],
+    risks: {
+      L3: ['Maternal hypertension', 'No prenatal care', 'Gestational age < 36 0/7 weeks'],
+      L4: ['Mother has preeclampsia', 'Maternal magnesium therapy', 'Intrauterine growth restriction', 'Meconium-stained fluid'],
+      L5: ['Category III fetal heart rate pattern', 'Mother febrile, fetus tachycardic', 'Breech or other abnormal presentation'],
+      L6: ['Maternal seizures (eclampsia)', 'Failed vacuum extraction', 'Fetal bradycardia'],
+      L7: ['Emergency c-section', 'General anesthesia'],
+      volume: ['Motor vehicle crash (maternal/fetal trauma)', 'Prolapsed cord or tight nuchal cord', 'Extensive vaginal bleeding',
+        'Fetal-maternal hemorrhage', 'Bleeding vasa previa', 'Placental laceration'],
+      // Preterm scenarios may use any of the above except these.
+      notPreterm: ['Meconium-stained fluid', 'Failed vacuum extraction'],
+    },
+    levels: [
+      { id: 'L3', name: 'Initial steps', lesson: 3, birth: ['Vaginal birth'] },
+      { id: 'L4', name: 'Ventilation', lesson: 4, birth: ['Vaginal birth', 'Cesarean birth'] },
+      { id: 'L5', name: 'Airway', lesson: 5, birth: ['Vaginal birth', 'Cesarean birth'] },
+      { id: 'L6', name: 'Compressions', lesson: 6, birth: ['Vaginal birth', 'Cesarean birth'] },
+      { id: 'L7', name: 'Medications', lesson: 7, birth: ['Emergency cesarean with general anesthesia'] },
+      { id: 'OA', name: 'Obstructed airway', lesson: 7, birth: ['Vaginal birth', 'Cesarean birth'] },
+      { id: 'L8', name: 'Preterm', lesson: 8, birth: ['Vaginal birth', 'Cesarean birth'] },
+    ],
+  },
 };
