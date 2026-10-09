@@ -959,8 +959,8 @@
   function renderPrebirth(host) {
     const lv = B().levels.find(l => l.id === scen.level);
     const answer = k => k === 'gest' ? `${scen.gest} weeks` : k === 'fluid' ? scen.fluid : k === 'risks' ? scen.risks.join(' · ') : '';
-    const brief = ['Team briefing · roles assigned', 'Equipment check: warmer, suction, PPV device, O₂ blender, pulse ox, ETT + laryngeal mask, UVC kit',
-      ...(scen.plan.level === 'L8' ? ['Plastic bag/wrap + thermal mattress ready'] : [])];
+    // Team briefing + equipment check happen at room setup, so only case-specific prep is listed here.
+    const brief = scen.plan.level === 'L8' ? ['Plastic bag/wrap + thermal mattress ready'] : [];
     host.innerHTML = `
       <div class="scen-pick">
         <span>Level</span>
@@ -975,8 +975,8 @@
             ${open ? k === 'cord' ? `<div class="ask-a"><span class="small">Plan with the obstetric provider:</span><div class="chips">${CORD.map(c => `<button class="chip${scen.cord === c ? ' on' : ''}" data-cord="${esc(c)}">${c}</button>`).join('')}</div></div>`
               : `<div class="ask-a">${esc(answer(k))}</div>` : ''}</div>`;
         }).join('')}</div>
-        <h3 class="sub">Before the birth</h3>
-        <ul class="checks">${brief.map((l, i) => `<li><button class="check${scen.brief.includes(i) ? ' on' : ''}" data-brief="${i}"><span class="box"></span><span>${esc(l)}</span></button></li>`).join('')}</ul>
+        ${brief.length ? `<h3 class="sub">Before the birth</h3>
+        <ul class="checks">${brief.map((l, i) => `<li><button class="check${scen.brief.includes(i) ? ' on' : ''}" data-brief="${i}"><span class="box"></span><span>${esc(l)}</span></button></li>`).join('')}</ul>` : ''}
         <div class="run-actions"><button class="btn primary" data-born>Baby is born · start the clock</button></div>
       </section>`;
     host.onclick = e => {
@@ -1162,7 +1162,6 @@
     const add = (label, ok, note, weight = 1) => items.push({ label, ok: !!ok, note, weight });
     const needsVent = !['vigorous', 'initial', 'cyanotic', 'labored'].includes(p.variant);
     add('Asked all 4 pre-birth questions', scen.asked.length === 4, 'Gestation? Fluid clear? Risk factors? Cord plan?');
-    add('Team briefing + equipment check', scen.brief.length >= (scen.briefN || 2), 'Brief the team and check equipment before every birth.');
     const firstAct = Math.min(...[s.initial, s.ppvFirst, s.cpapAt, s.routine ? s.endAt : null].filter(v => v != null), Infinity);
     add('Rapid evaluation first (term? tone? breathing?)', scen.looked && scen.lookFirst <= firstAct, 'Look at the baby before you act.');
     if (scen.cord === 'Intact cord milking' && scen.gest < 28) add('Cord plan fits the gestation', false, 'Cord milking is not recommended < 28 wks (risk of severe IVH).');
