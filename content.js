@@ -184,6 +184,7 @@ const NRP = {
       // Preterm scenarios may use any of the above except these.
       notPreterm: ['Meconium-stained fluid', 'Failed vacuum extraction'],
     },
+    // Builder lessons: how far into the algorithm the baby takes you.
     levels: [
       { id: 'L3', name: 'Initial steps', lesson: 3, birth: ['Vaginal birth'] },
       { id: 'L4', name: 'Ventilation', lesson: 4, birth: ['Vaginal birth', 'Cesarean birth'] },
@@ -191,7 +192,14 @@ const NRP = {
       { id: 'L6', name: 'Compressions', lesson: 6, birth: ['Vaginal birth', 'Cesarean birth'] },
       { id: 'L7', name: 'Medications', lesson: 7, birth: ['Emergency cesarean with general anesthesia'] },
       { id: 'OA', name: 'Obstructed airway', lesson: 7, birth: ['Vaginal birth', 'Cesarean birth'] },
-      { id: 'L8', name: 'Preterm', lesson: 8, birth: ['Vaginal birth', 'Cesarean birth'] },
     ],
+    // The buttons in Run it. Preterm (lesson 8) isn't a button: any case may turn out preterm.
+    severities: [
+      { id: 'mild', name: 'Mild', hint: 'Fine after initial steps, maybe O₂ or CPAP', levels: ['L3'] },
+      { id: 'moderate', name: 'Moderate', hint: 'Needs PPV + MR. SOPA', levels: ['L4'] },
+      { id: 'severe', name: 'Severe', hint: 'Needs an airway or compressions', levels: ['L5', 'OA', 'L6'] },
+      { id: 'critical', name: 'Critical', hint: 'Needs epi ± volume', levels: ['L7'] },
+    ],
+    pretermChance: 0.25,
   },
 };

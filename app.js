@@ -820,7 +820,8 @@
      Time = real time since birth + any "Skip" seconds. */
   let runMode = local.get('runMode', 'scenario');
   let scen = local.get('scen', null);
-  let scenLevel = local.get('scenLevel', 'random');
+  let scenLevel = local.get('scenLevel', 'random');  // severity: random / mild / moderate / severe / critical
+  if (!['random', 'mild', 'moderate', 'severe', 'critical'].includes(scenLevel)) scenLevel = 'random';
   const saveScen = () => local.set('scen', scen);
   const rnd = (a, b) => a + Math.random() * (b - a);
   const rint = (a, b) => Math.floor(rnd(a, b + 1));
@@ -836,15 +837,17 @@
   }
 
   // ---- Making a case ----
-  function makeScen(levelId) {
-    const levels = B().levels, lv = levelId === 'random' ? pick(levels) : levels.find(l => l.id === levelId);
-    const R = B().risks, preterm = lv.id === 'L8';
+  function makeScen(sevId) {
+    const sev = sevId === 'random' ? pick(B().severities) : B().severities.find(x => x.id === sevId);
+    const lvId = pick(sev.levels), lv = B().levels.find(l => l.id === lvId);
+    const R = B().risks, preterm = Math.random() < B().pretermChance;
     let risks = [];
     const before = { L3: [], L4: R.L3, L5: [...R.L3, ...R.L4], L6: [...R.L3, ...R.L4, ...R.L5] };
     if (lv.id === 'L3' || lv.id === 'OA') risks = Math.random() < 0.3 ? [] : pickN(R.L3, rint(1, 2));
     else if (lv.id === 'L7') risks = [...pickN(R.L6, rint(1, 2)), ...R.L7];
-    else if (preterm) risks = pickN([...R.L3, ...R.L4, ...R.L5, ...R.L6].filter(r => !R.notPreterm.includes(r) && !r.startsWith('Gestational')), rint(1, 2));
     else risks = [...pickN(before[lv.id], 1), ...pickN(R[lv.id], rint(1, 2))];
+    // Preterm: no meconium, no failed vacuum, and the gestation already says preterm.
+    if (preterm) risks = risks.filter(r => !R.notPreterm.includes(r) && !r.startsWith('Gestational'));
     const volume = lv.id === 'L7' && Math.random() < 0.6;
     if (volume) risks.push(pick(R.volume));
     // Gestation: preterm 25–33 wks; "< 36 wks" risk → 34–35; otherwise term 37–41.
@@ -854,7 +857,8 @@
     const weight = round2(rnd(row[2], row[3]));
     const fix = pick([null, 'M', 'R', 'S', 'O', 'P']);
     const plan = { level: lv.id, hr0: 110, breath: 'apnea', fix: null, airway: false, obstruct: false, comp: false, epiNeed: 0, volume, needFiO2: 21, variant: '' };
-    if (lv.id === 'L3') {
+    if (lv.id === 'L3' && preterm) Object.assign(plan, { variant: 'labored', hr0: 120, breath: 'labored' });  // mild preterm: CPAP
+    else if (lv.id === 'L3') {
       plan.variant = pick(['vigorous', 'initial', 'cyanotic']);
       if (plan.variant === 'vigorous') Object.assign(plan, { hr0: 150, breath: 'crying' });
       if (plan.variant === 'cyanotic') plan.needFiO2 = 40;
@@ -864,13 +868,9 @@
     if (lv.id === 'OA') Object.assign(plan, { hr0: 70, obstruct: true });
     if (lv.id === 'L6') Object.assign(plan, { hr0: 50, fix, comp: true });
     if (lv.id === 'L7') Object.assign(plan, { hr0: 30, fix, comp: true, epiNeed: rint(1, 2) });
-    if (lv.id === 'L8') {
-      plan.variant = pick(['labored', 'apnea']);
-      Object.assign(plan, { needFiO2: 35, hr0: plan.variant === 'labored' ? 120 : 90, breath: plan.variant === 'labored' ? 'labored' : 'apnea',
-        fix: plan.variant === 'apnea' ? pick([null, 'M', 'R']) : null });
-    }
+    if (preterm) Object.assign(plan, { preterm: true, needFiO2: gest < 32 ? 35 : 25 }, lv.id === 'L4' ? { hr0: 90 } : {});
     return {
-      v: 1, level: lv.id, levelName: lv.name, birthMode: pick(lv.birth), gest, weight, fluid: risks.includes('Meconium-stained fluid') ? 'Meconium-stained' : 'Clear',
+      v: 2, level: lv.id, levelName: lv.name, sev: sev.id, sevName: sev.name, birthMode: pick(lv.birth), gest, weight, fluid: risks.includes('Meconium-stained fluid') ? 'Meconium-stained' : 'Clear',
       risks: risks.length ? risks : ['No apparent risk factors'], plan, stage: 'prebirth', asked: [], cord: null, brief: [],
       t0: null, skip: 0, sim: 0, weighed: false, looked: false,
       baby: { hr: plan.hr0, breath: plan.breath, spo2: 60, hr100: 0, breathAt: null },
@@ -909,7 +909,7 @@
     // Initial steps start a baby who only needed stimulation.
     if (p.level === 'L3' && p.variant !== 'vigorous' && s.initial != null && b.breath === 'apnea' && t - s.initial >= 5)
       b.breath = p.variant === 'cyanotic' ? 'labored' : 'crying';
-    if (p.level === 'L8' && p.variant === 'labored' && s.cpap && t - s.cpapAt > 60) b.breath = 'breathing';
+    if (p.variant === 'labored' && s.cpap && t - s.cpapAt > 60) b.breath = 'breathing';
     let target = b.hr, rate = 0;
     if (spont()) { target = p.variant === 'cyanotic' || b.breath === 'labored' ? 135 : 150; rate = 3; }
     else if (eff) {
@@ -947,7 +947,7 @@
   let scenTick = null;
   function renderScen(host) {
     clearInterval(scenTick);
-    if (!scen || scen.v !== 1) { scen = makeScen(scenLevel); saveScen(); }
+    if (!scen || scen.v !== 2) { scen = makeScen(scenLevel); saveScen(); }
     if (scen.stage === 'prebirth') return renderPrebirth(host);
     if (scen.stage === 'debrief') return renderScenDebrief(host);
     advance();
@@ -957,17 +957,18 @@
   const QUESTIONS = [['gest', 'Gestation?'], ['fluid', 'Amniotic fluid clear?'], ['risks', 'Additional risk factors?'], ['cord', 'Umbilical cord management plan?']];
   const CORD = ['Deferred clamping (≥ 60 sec) if vigorous', 'Intact cord milking', 'Immediate clamping'];
   function renderPrebirth(host) {
-    const lv = B().levels.find(l => l.id === scen.level);
+    const sev = B().severities.find(x => x.id === scenLevel);
     const answer = k => k === 'gest' ? `${scen.gest} weeks` : k === 'fluid' ? scen.fluid : k === 'risks' ? scen.risks.join(' · ') : '';
     // Team briefing + equipment check happen at room setup, so only case-specific prep is listed here.
-    const brief = scen.plan.level === 'L8' ? ['Plastic bag/wrap + thermal mattress ready'] : [];
+    const brief = scen.plan.preterm && scen.asked.includes('gest') ? ['Plastic bag/wrap + thermal mattress ready'] : [];  // shows once you know it's preterm
     host.innerHTML = `
       <div class="scen-pick">
-        <span>Level</span>
-        <div class="chips">${[['random', 'Random'], ...B().levels.map(l => [l.id, l.name])].map(([k, n]) => `<button class="chip${scenLevel === k ? ' on' : ''}" data-level="${k}">${n}</button>`).join('')}</div>
+        <span>Severity</span>
+        <div class="seg sev">${[['random', 'Random'], ...B().severities.map(x => [x.id, x.name])].map(([k, n]) => `<button class="${scenLevel === k ? 'on' : ''}" data-level="${k}">${n}</button>`).join('')}</div>
+        <small>${sev ? esc(sev.hint) : 'Any severity: you find out when the baby is born.'}</small>
       </div>
       <section class="run-step ph-prep">
-        <h2><span class="pill">${scenLevel === 'random' ? 'Random case' : esc(lv.name)}</span></h2>
+        <h2><span class="pill">${sev ? `${esc(sev.name)} case` : 'Random case'}</span></h2>
         <p class="small">${esc(scen.birthMode)}. Ask the 4 pre-birth questions. Tap each one to hear the answer.</p>
         <div class="asks">${QUESTIONS.map(([k, q], i) => {
           const open = scen.asked.includes(k);
@@ -1031,7 +1032,7 @@
           <h3>Assess</h3>
           <div class="act-row">${btn('look', 'Look at baby')}${btn('hr', 'Check HR')}${btn('pox', s.pox != null ? 'Pulse ox on' : 'Pulse ox', s.pox != null ? 'done' : '')}${btn('monitor', s.monitor != null ? 'Monitor on' : 'Cardiac monitor', s.monitor != null ? 'done' : '')}${btn('weigh', scen.weighed ? `Weighed ${fmt(scen.weight)} kg` : 'Weigh on warmer', scen.weighed ? 'done' : '')}</div>
           <h3>Airway + breathing</h3>
-          <div class="act-row">${btn('routine', 'Routine care · skin to skin')}${btn('initial', s.initial != null ? 'Initial steps done' : 'Initial steps', s.initial != null ? 'done' : '')}${scen.plan.level === 'L8' ? btn('wrap', s.wrap != null ? 'Wrapped' : 'Plastic bag/wrap', s.wrap != null ? 'done' : '') : ''}
+          <div class="act-row">${btn('routine', 'Routine care · skin to skin')}${btn('initial', s.initial != null ? 'Initial steps done' : 'Initial steps', s.initial != null ? 'done' : '')}${btn('wrap', s.wrap != null ? 'Wrapped' : 'Plastic bag/wrap', s.wrap != null ? 'done' : '')}
             ${btn('ffo2', s.ffo2 ? 'Free-flow O₂ on' : 'Free-flow O₂', on(s.ffo2))}${btn('cpap', s.cpap ? 'CPAP on' : 'CPAP', on(s.cpap))}${btn('ppv', s.ppv ? 'PPV on · stop' : 'Start PPV', on(s.ppv))}</div>
           ${s.ppv || s.letters.length || s.airway ? `<h3>MR. SOPA</h3>
           <div class="act-row sopa">${[['M', 'Mask'], ['R', 'Reposition'], ['S', 'Suction'], ['O', 'Open mouth'], ['P', 'Pressure ↑ 5']].map(([k, n]) => btn('L' + k, `<b>${k}</b> ${n}`, s.letters.includes(k) ? 'done' : '')).join('')}
@@ -1167,7 +1168,7 @@
     if (scen.cord === 'Intact cord milking' && scen.gest >= 28 && scen.gest < 35) add('Cord plan fits the gestation', false, 'Not enough evidence to recommend routine cord milking at 28–34 wks.');
     if (p.variant === 'vigorous') add('Vigorous baby → routine care, no extra interventions', s.routine && s.ppvFirst == null && s.cpapAt == null, 'Term, good tone, crying = skin to skin with the parent.', 2);
     else add('Initial steps done', s.initial != null && (s.ppvFirst == null || s.initial <= s.ppvFirst + 5), 'Warm, dry, position, stimulate, clear airway if needed.');
-    if (p.level === 'L8') add('Preterm warmth: plastic bag/wrap', s.wrap != null && s.wrap <= 60, 'Use extra thermoregulation for preterm babies.');
+    if (p.preterm) add('Preterm warmth: plastic bag/wrap', s.wrap != null && s.wrap <= 60, 'Use extra thermoregulation for preterm babies.');
     if (needsVent) {
       add('Ventilation started within 60 sec', s.ppvFirst != null && s.ppvFirst <= 60, 'Apnea/gasping or HR < 100 → ventilate within the golden minute.', 2);
       add('HR checked 15–30 sec after starting PPV', s.ppvFirst != null && (s.hrChecks.some(([t]) => t >= s.ppvFirst && t <= s.ppvFirst + 35) || (s.monitor != null && s.monitor <= s.ppvFirst + 35)), 'Is the HR rising? If not, look for chest movement.');
@@ -1211,16 +1212,17 @@
     const p = scen.plan;
     const o2 = scen.gest >= 35 ? '21%' : scen.gest >= 32 ? '21–30%' : '≥ 30%';
     const fixName = { M: 'adjusting the mask', R: 'repositioning the head', S: 'suctioning mouth + nose', O: 'opening the mouth', P: 'raising the pressure' }[p.fix];
-    return {
+    const story = {
       L3: { vigorous: 'Vigorous term baby: routine care, skin to skin with the parent.', initial: 'Needed initial steps only: stimulation got the baby crying.', cyanotic: 'Breathing but labored and cyanotic after initial steps: pulse ox, O₂ ± CPAP.' }[p.variant],
       L4: `Apneic, HR ${p.hr0}. Needed ventilation${p.fix ? `; the chest only moved after ${fixName}` : '; the chest moved right away'}.`,
       L5: `Apneic, HR ${p.hr0}. Mask ventilation never moved the chest: needed an alternative airway (intubation or laryngeal mask).`,
       OA: `Apneic, HR ${p.hr0}. Airway obstructed (blood, debris, vernix${term() ? ' or meconium' : ''}): no chest movement until intubated and suctioned.`,
       L6: `HR ${p.hr0} even with good ventilation${p.fix ? ` (chest moved after ${fixName})` : ''}: needed compressions with 100% O₂ and an airway.`,
       L7: `HR ${p.hr0}: needed compressions, ${p.epiNeed} dose${p.epiNeed > 1 ? 's' : ''} of epi${p.volume ? ' and volume for blood loss' : ''}.`,
-      L8: p.variant === 'labored' ? `Preterm ${scen.gest} wks, breathing but labored: warmth, CPAP and starting FiO₂ ${o2}.`
-        : `Preterm ${scen.gest} wks, apneic: warmth, then ventilation (PIP ${scen.gest < 32 ? '20–25' : '25–30'}) with starting FiO₂ ${o2}${p.fix ? `; chest moved after ${fixName}` : ''}.`,
     }[p.level];
+    if (!p.preterm) return story;
+    if (p.variant === 'labored') return `Preterm ${scen.gest} wks, breathing but labored: warmth, CPAP and starting FiO₂ ${o2}.`;
+    return `Preterm ${scen.gest} wks: warmth (plastic bag/wrap), starting FiO₂ ${o2}, PIP ${scen.gest < 32 ? '20–25' : '25–30'}. ${story}`;
   }
 
   function renderScenDebrief(host) {
@@ -1229,7 +1231,7 @@
       <div class="run">
         <section class="run-step ph-after">
           <h2><span class="pill">Debrief</span></h2>
-          <div class="grade-row"><span class="grade g-${g.grade}">${g.grade}</span><div><b>${g.pct}%</b><p class="small">${scen.gest} wks · ${esc(scen.levelName)} · ${mmss(scen.s.endAt ?? scen.sim)} total</p></div></div>
+          <div class="grade-row"><span class="grade g-${g.grade}">${g.grade}</span><div><b>${g.pct}%</b><p class="small">${esc(scen.sevName)} · ${scen.gest} wks${scen.plan.preterm ? ' (preterm)' : ''} · ${mmss(scen.s.endAt ?? scen.sim)} total</p></div></div>
           <p class="case-story"><b>The case:</b> ${esc(caseStory())}</p>
           <ul class="grade-list">${g.items.map(i => `<li class="${i.ok ? 'ok' : 'no'}"><span class="gi">${i.ok ? '✓' : '!'}</span><div><b>${esc(i.label)}</b>${i.ok ? '' : `<small>Consider: ${esc(i.note)}</small>`}</div></li>`).join('')}</ul>
           <p class="small">What went well? What would you change?</p>

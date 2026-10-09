@@ -378,6 +378,9 @@ li.big {
 .run-modes { display: flex; width: max-content; margin: 0 auto 14px; }
 .chip.on { background: var(--text); color: var(--card); border-color: var(--text); }
 .scen-pick { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-weight: 800; }
+.scen-pick small { font-weight: 600; color: var(--muted); font-size: 14px; }
+.seg.sev { display: flex; width: 100%; }
+.seg.sev button { flex: 1; padding: 7px 4px; font-size: 14px; }
 .asks { display: grid; gap: 8px; margin: 10px 0 16px; }
 .ask { background: var(--soft); border-radius: 14px; }
 .ask-q { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 12px; font-size: 17px; font-weight: 800; text-align: left; cursor: pointer; color: var(--text); }
