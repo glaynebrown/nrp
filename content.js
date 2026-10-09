@@ -5,7 +5,8 @@
    changes are saved to your account and laid on top of this.
 
    Little markup used in the text:
-     ==words==   peach highlight      ++words++   lavender highlight
+     ==words==   peach = values (doses, pressures, times)
+     ++words++   lavender = the key action a step leads to (Start PPV, CPAP, epi route…)
      **words**   bold                 [[verify]]  "check your book" dot
    The 6 big steps are `groups`; each card is a substep. Each card has `lines` (the main points) and optional `asides` (the side
    notes with a * in the notes). In Study mode each line is hidden until tapped. */
@@ -47,7 +48,7 @@ const NRP = {
         'Appear **term**?',
         '**Crying / breathing**?',
         'Good **tone**?',
-        'All yes = ==delay cord clamping==',
+        'All yes = ++delay cord clamping++',
       ],
       asides: ['If some are “no” → warmer, or delay some. Either is appropriate.'],
     },
@@ -57,21 +58,21 @@ const NRP = {
       lines: [
         'Cut cord',
         'Warmer',
-        '==< 32 wks = bag== (plastic wrap)',
+        '==< 32 wks== = plastic bag',
         'Warm / dry / stimulate',
         '**Sniffing** position',
         'Clear secretions **PRN**. No routine suctioning (vagal nerve → bradycardia)',
       ],
-      asides: ['If immediate clamp/cut, consider ==milking the cord if > 28 wks==.'],
+      asides: ['If immediate clamp/cut, consider milking the cord if ==> 28 wks==.'],
     },
     {
       id: 'decision', phase: 'first', title: 'The decision',
       summary: 'Breathing? HR > 100?',
       lines: [
-        '**Breathing?** and **HR > 100?**',
+        '**Breathing?** and **HR** ==> 100==?',
         'Yes + no resp. distress → check **SpO₂**. If low, can give ++blow-by++',
-        'Yes + resp. distress → can give ++CPAP++ to lessen work of breathing (++PEEP = 5++)',
-        '**No** (apnea/gasping or HR < 100) → ==Start PPV==',
+        'Yes + resp. distress → can give ++CPAP++ to lessen work of breathing (PEEP ==5==)',
+        '**No** (apnea/gasping or HR ==< 100==) → ++Start PPV++',
       ],
     },
     {
@@ -79,9 +80,9 @@ const NRP = {
       summary: 'Neopuff or BVM · 25/5 · 15 sec then HR check',
       lines: [
         'Neopuff or BVM to ventilate',
-        '==Pressure 25/5== (PIP 25 / PEEP 5)',
-        'Rate 30–60 (“breathe… two… three”)',
-        '**15 sec**, then HR check',
+        'Pressure ==25/5== (PIP 25 / PEEP 5)',
+        'Rate ==30–60== (“breathe… two… three”)',
+        '==15 sec==, then HR check',
       ],
       link: { tab: 'tips', label: 'See PEEP vs PIP' },
     },
@@ -93,23 +94,23 @@ const NRP = {
         '**R**eposition head',
         '**S**uction',
         '**O**pen mouth',
-        '**P**ressure ↑ by 5',
+        '**P**ressure ↑ by ==5==',
         '**A**rtificial airway (consider intubation)',
       ],
       asides: [
         'Stay here until chest rise!',
-        'Chest rise with ventilations → 15 more sec PPV, then HR check (==30 sec total==).',
+        'Chest rise with ventilations → ==15 more sec== PPV, then HR check (==30 sec total==).',
       ],
     },
     {
       id: 'cpr', phase: 'cpr', title: 'Start compressions',
       summary: '30 sec PPV w/ chest rise + HR < 60 → compressions',
       lines: [
-        '++Total of 30 sec PPV with chest rise++ and ==HR < 60==',
-        '**Start compressions:** “1-and-2-and-3-and-breathe”',
-        'Intubate with **FiO₂ 100%** + consider **cardiac monitoring**',
-        '++60 sec++, then HR check',
-        'HR > 60 → stop CPR + continue PPV',
+        'After ==30 sec== of PPV with chest rise, **HR** ==< 60==',
+        '++Start compressions++: “1-and-2-and-3-and-breathe”',
+        'Intubate with FiO₂ ==100%== + consider cardiac monitoring',
+        '==60 sec==, then HR check',
+        'HR ==> 60== → stop CPR + continue PPV',
       ],
       link: { tab: 'tips', label: 'Practice the rhythm' },
     },
@@ -117,11 +118,11 @@ const NRP = {
       id: 'epi', phase: 'cpr', title: 'HR still < 60 → Epi',
       summary: '1:10,000 · IV/IO 0.2 mL/kg · ET 1 mL/kg',
       lines: [
-        '++IV (UVC) / IO++ · 1:10,000 · ==0.2 mL/kg== · q 3–5 min',
-        'After each IV/IO push → **flush 3 mL NS**',
+        '++IV (UVC) / IO++ · 1:10,000 · ==0.2 mL/kg== · ==q 3–5 min==',
+        'After each IV/IO push → flush ==3 mL NS==',
         'If unable to get a line (until you can) → ++ET++ · 1:10,000 · ==1 mL/kg==',
       ],
-      asides: ['1:10,000 = **0.1 mg in every mL**.'],
+      asides: ['1:10,000 = ==0.1 mg== in every mL.'],
       link: { tab: 'meds', label: 'Do the math' },
     },
     {

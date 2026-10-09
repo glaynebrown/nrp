@@ -38,39 +38,36 @@
   };
 
   /* ================= Colors ================= */
+  // Six colors you can change. Peach = values, lavender = actions; red is kept for danger only.
   const TOKENS = [
-    ['bg', 'Page'], ['card', 'Cards'], ['text', 'Writing'], ['head', 'Headings'], ['pill', 'Heading pill'],
-    ['peach', 'Peach highlight'], ['lav', 'Lavender highlight'], ['lav-ink', 'Lavender writing'],
-    ['accent', 'Buttons'],
-    ['ph-prep', 'Step 1 · Prep'], ['ph-first', 'Step 2 · Golden minute'], ['ph-vent', 'Step 3 · PPV'],
-    ['ph-cpr', 'Step 4 · CPR'], ['ph-meds', 'Step 5 · Hypovolemia/PTX'], ['ph-after', 'Step 6 · Debrief'],
+    ['bg', 'Page'], ['card', 'Cards'], ['text', 'Text'],
+    ['accent', 'Buttons'], ['peach', 'Peach (values)'], ['lav', 'Lavender (actions)'],
+    ['st-prep', 'Step color · Blue'], ['st-first', 'Step color · Gold'], ['st-vent', 'Step color · Teal'],
+    ['st-cpr', 'Step color · Berry'], ['st-meds', 'Step color · Plum'], ['st-after', 'Step color · Sage'],
   ];
+  // Each big step has its own color (set per step in Edit cards; these are the defaults).
+  const STEP_COLORS = [['prep', 'Blue'], ['first', 'Gold'], ['vent', 'Teal'], ['cpr', 'Berry'], ['meds', 'Plum'], ['after', 'Sage']];
   const LOOKS = {
-    notes: {
-      name: 'My notes', bg: '#faf6f3', card: '#ffffff', text: '#1f4f66', head: '#7a1f22', pill: '#dcaaa8',
-      peach: '#f9dcc3', lav: '#e8dbf7', 'lav-ink': '#a46fd6', accent: '#1f4f66', rule: '#e3e6ee',
-      'ph-prep': '#dcaaa8', 'ph-first': '#f0b88c', 'ph-vent': '#bb95e6', 'ph-cpr': '#c76c6f', 'ph-meds': '#a46fd6', 'ph-after': '#77a6b9',
-    },
-    night: {
-      name: 'Night', bg: '#1c1a22', card: '#27242f', text: '#d6e6ef', head: '#f3c1c0', pill: '#6b3d48',
-      peach: '#5b4231', lav: '#423658', 'lav-ink': '#cfa8f5', accent: '#93c6dd', rule: '#34313e',
-      'ph-prep': '#b9787d', 'ph-first': '#d79a6c', 'ph-vent': '#a07dd0', 'ph-cpr': '#c86468', 'ph-meds': '#b88ae6', 'ph-after': '#6f9fb3',
-    },
+    light: { name: 'Light', bg: '#faf6f3', card: '#ffffff', text: '#1f4f66', accent: '#1f4f66', peach: '#f9dcc3', lav: '#e8dbf7',
+      'st-prep': '#5b7fa6', 'st-first': '#c39a3a', 'st-vent': '#3f8f8a', 'st-cpr': '#a3486b', 'st-meds': '#7a5a9e', 'st-after': '#6f9a72' },
+    night: { name: 'Night', bg: '#1c1a22', card: '#27242f', text: '#d6e6ef', accent: '#93c6dd', peach: '#5b4231', lav: '#423658',
+      'st-prep': '#8fb0d4', 'st-first': '#e0bd66', 'st-vent': '#6cc0b9', 'st-cpr': '#d77fa0', 'st-meds': '#b294d6', 'st-after': '#9cc79f' },
   };
   // Fonts: [name, Google Fonts family param (null = no download), CSS fallback]
   const HAND_FONTS = [
     ['Patrick Hand', 'Patrick+Hand', 'cursive'], ['Caveat', 'Caveat:wght@500;700', 'cursive'],
     ['Kalam', 'Kalam:wght@400;700', 'cursive'], ['Gaegu', 'Gaegu:wght@400;700', 'cursive'],
     ['Delius', 'Delius', 'cursive'], ['Indie Flower', 'Indie+Flower', 'cursive'],
-    ['Shadows Into Light Two', 'Shadows+Into+Light+Two', 'cursive'], ['Same as text', null, ''],
+    ['Shadows Into Light Two', 'Shadows+Into+Light+Two', 'cursive'],
   ];
+  HAND_FONTS.unshift(['Same as text', null, '']);
   const BODY_FONTS = [
     ['Nunito', 'Nunito:wght@400;600;700;800', 'sans-serif'], ['Quicksand', 'Quicksand:wght@400;500;600;700', 'sans-serif'],
     ['Poppins', 'Poppins:wght@400;500;600;700;800', 'sans-serif'], ['DM Sans', 'DM+Sans:wght@400;500;700;800', 'sans-serif'],
     ['Lora', 'Lora:wght@400;600;700', 'serif'], ['Atkinson Hyperlegible', 'Atkinson+Hyperlegible:wght@400;700', 'sans-serif'],
     ['System', null, 'system-ui, sans-serif'],
   ];
-  const loadedFonts = new Set(['Patrick+Hand', 'Nunito:wght@400;600;700;800']);
+  const loadedFonts = new Set(['Nunito:wght@400;600;700;800']);
   function loadFonts(params) {
     const need = params.filter(p => p && !loadedFonts.has(p));
     if (!need.length) return;
@@ -80,11 +77,20 @@
     document.head.append(l);
   }
   const stack = ([name, , fb]) => name === 'System' ? fb : `'${name}', ${fb}`;
-  const theme = local.get('theme', { look: 'notes', custom: {} });
-  theme.fonts ||= { hand: 'Patrick Hand', body: 'Nunito' };
+  const theme = local.get('theme', { look: 'light', custom: {} });
+  // Oct 2026 restyle: headings are plain bold text now (a handwriting font is optional).
+  function upgradeTheme(t) {
+    if (t.look === 'notes') t.look = 'light';
+    if (!LOOKS[t.look]) t.look = 'light';
+    t.custom ||= {}; if (t.custom.notes) { t.custom.light = t.custom.notes; delete t.custom.notes; }
+    t.fonts ||= { hand: 'Same as text', body: 'Nunito' };
+    if (!t.v2) { t.fonts.hand = 'Same as text'; t.v2 = true; }
+    return t;
+  }
+  upgradeTheme(theme);
   function applyFonts() {
     const b = BODY_FONTS.find(f => f[0] === theme.fonts.body) || BODY_FONTS[0];
-    const h = HAND_FONTS.find(f => f[0] === theme.fonts.hand) || HAND_FONTS[0];
+    const h = HAND_FONTS.find(f => f[0] === theme.fonts.hand) || HAND_FONTS[0];  // [0] = same as text
     loadFonts([b[1], h[1]]);
     const root = document.documentElement.style;
     root.setProperty('--body', stack(b));
@@ -94,7 +100,7 @@
   const rgbHex = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
   const mix = (a, b, t) => rgbHex(hexRgb(a).map((v, i) => v + (hexRgb(b)[i] - v) * t));
   const lum = h => { const [r, g, b] = hexRgb(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
-  const colorsNow = () => ({ ...LOOKS[theme.look] || LOOKS.notes, ...(theme.custom[theme.look] || {}) });
+  const colorsNow = () => ({ ...LOOKS[theme.look] || LOOKS.light, ...(theme.custom[theme.look] || {}) });
   function applyColors() {
     const c = colorsNow(), root = document.documentElement.style;
     TOKENS.forEach(([k]) => root.setProperty('--' + k, c[k]));
@@ -103,8 +109,16 @@
     root.setProperty('--line', mix(c.text, c.card, 0.86));
     root.setProperty('--soft', mix(c.bg, c.text, 0.05));
     root.setProperty('--on-accent', lum(c.accent) > 0.4 ? '#1b1b1f' : '#ffffff');
-    root.setProperty('--ink-ink', c.text); root.setProperty('--ink-rose', c.pill); root.setProperty('--ink-maroon', c.head);
-    root.setProperty('--ink-lav', c['lav-ink']); root.setProperty('--ink-peach', mix(c.peach, '#c8642c', dark ? 0.2 : 0.5));
+    // Darker (or, at night, lighter) versions of peach + lavender for text, markers and the ✱.
+    const lavInk = dark ? mix(c.lav, '#e6d2ff', 0.75) : mix(c.lav, '#5a2a96', 0.62);
+    const peachInk = dark ? mix(c.peach, '#ffd2a8', 0.75) : mix(c.peach, '#a8501a', 0.62);
+    root.setProperty('--lav-ink', lavInk); root.setProperty('--peach-ink', peachInk);
+    root.setProperty('--danger', dark ? '#e0777d' : '#b4434b');
+    // Number color on each step circle: white on darker colors, navy on lighter ones.
+    STEP_COLORS.forEach(([k]) => root.setProperty(`--st-${k}-on`, lum(c['st-' + k]) > 0.33 ? '#1b2a33' : '#ffffff'));
+    // Pencil colors in notes
+    root.setProperty('--ink-ink', c.text); root.setProperty('--ink-rose', dark ? '#e3a3a8' : '#cf7f86'); root.setProperty('--ink-maroon', dark ? '#f0b8b8' : '#7a1f22');
+    root.setProperty('--ink-lav', lavInk); root.setProperty('--ink-peach', peachInk);
     root.setProperty('--ink-teal', mix(c.accent, '#3aa39a', 0.55));
     document.documentElement.classList.toggle('dark', dark);
     $('meta[name=theme-color]').content = c.bg;
@@ -311,7 +325,6 @@
   }
 
   /* ---------- Edit cards ---------- */
-  const PHASE_NAMES = { prep: 'Rose', first: 'Peach', vent: 'Lavender', cpr: 'Red', meds: 'Purple', after: 'Blue' };
   let editMode = false, lastField = null;
   function renderEditCards(host) {
     const lines = a => esc((a || []).join('\n'));
@@ -356,7 +369,7 @@
             ${mv('group', g.id, i, NRP.groups.length)}
           </div>
           <div class="eg-opts">
-            <label>Color <select data-k="groups" data-id="${g.id}" data-f="phase">${Object.entries(NRP.phases).map(([k]) => `<option value="${k}" ${g.phase === k ? 'selected' : ''}>${esc(PHASE_NAMES[k])}</option>`).join('')}</select></label>
+            <label>Color <select data-k="groups" data-id="${g.id}" data-f="phase">${STEP_COLORS.map(([k, n]) => `<option value="${k}" ${g.phase === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
             ${isEdited('groups', g.id) ? `<button class="link" data-reset="groups:${g.id}">Reset title + color</button>` : ''}
           </div>
           ${g.cards.map((id, j) => card(CARD[id], j, g)).join('')}
@@ -400,8 +413,8 @@
       if (isEdited(el.dataset.k, el.dataset.id) && !existing) head.insertAdjacentHTML('beforeend', `<button class="link" data-reset="${key}">${el.dataset.k === 'groups' ? 'Reset' : 'Reset to original'}</button>`);
       if (!isEdited(el.dataset.k, el.dataset.id) && existing) existing.remove();
     }
+    host.onchange = e => { if (e.target.tagName === 'SELECT') { const y = window.scrollY; renderEditCards(host); window.scrollTo({ top: y }); } };
     host.onfocusin = e => { if (e.target.matches('input:not([type=number]), textarea')) lastField = e.target; };
-    host.onchange = e => { if (e.target.tagName === 'SELECT') renderEditCards(host); };
     $$('[data-fmt]', host).forEach(b => b.onmousedown = e => e.preventDefault());
     host.onclick = async e => {
       const t = e.target;
@@ -592,7 +605,7 @@
     cpap: () => ({
       title: 'Labored breathing / cyanosis', phase: 'vent',
       body: `<ul class="lines"><li class="line">Position, clear airway PRN</li><li class="line">Pulse ox (right hand). Target now: <b data-spo2>${spo2Now()}</b></li>
-        <li class="line">No distress but low SpO₂ → ${md('++blow-by++')}</li><li class="line">Distress → ${md('++CPAP++ (++PEEP = 5++)')}</li></ul>`,
+        <li class="line">No distress but low SpO₂ → ${md('++blow-by++')}</li><li class="line">Distress → ${md('++CPAP++ (PEEP ==5==)')}</li></ul>`,
       actions: [['Improving', () => go('routine', 'Improved with CPAP/O₂'), ''], ['Apnea or HR < 100', () => go('ppv', 'Deteriorated → PPV started'), 'primary']],
     }),
     ppv: () => ({
@@ -763,7 +776,7 @@
     ['It’s a ratio', '**1 : 10,000** means **1 gram** of epi mixed into **10,000 mL** of fluid.', '1 g', '10,000 mL'],
     ['Change grams to mg', '1 g = **1,000 mg**. So it’s **1,000 mg** in **10,000 mL**.', '1,000 mg', '10,000 mL'],
     ['Shrink it to 1 mL', 'Divide both sides by 10,000: ==0.1 mg in every 1 mL==.', '0.1 mg', '1 mL'],
-    ['Compare to 1:1,000', '++1:1,000 = 1 mg/mL++. That’s **10× stronger** than 1:10,000. Mixing them up is the classic epi error.', '', ''],
+    ['Compare to 1:1,000', '1:1,000 = ==1 mg/mL==. That’s **10× stronger** than 1:10,000. Mixing them up is the classic epi error.', '', ''],
   ];
   function renderExplain() {
     const host = $('#explain'), [h, txt, top, bot] = EXPLAIN[explainStep], last = explainStep === EXPLAIN.length - 1;
@@ -962,7 +975,7 @@
         <div class="fio2">${NRP.fio2.map(([g, v]) => `<div class="f-row"><span>${esc(g)}</span><b>${esc(v)}</b></div>`).join('')}</div>
         <ul class="lines tips-list">
           <li class="line">Starting point when you set up. Then <b>adjust</b> to hit the SpO₂ targets below.</li>
-          <li class="line">${md('Compressions → ++FiO₂ 100%++')}</li>
+          <li class="line">${md('++Compressions++ → FiO₂ ==100%==')}</li>
         </ul>
       </section>
       <section class="panel light">
@@ -1215,6 +1228,14 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
 
   /* ================= Settings ================= */
+  // Step colors are named by the step(s) using them right now, e.g. "Step 2 · Golden minute".
+  function tokenLabel(k, label) {
+    if (!k.startsWith('st-')) return label;
+    const nums = NRP.groups.map((g, i) => [i + 1, g]).filter(([, g]) => g.phase === k.slice(3));
+    if (!nums.length) return `Not used · ${STEP_COLORS.find(([p]) => p === k.slice(3))[1]}`;
+    if (nums.length === 1) return `Step ${nums[0][0]} · ${nums[0][1].title || 'Untitled'}`;
+    return `Steps ${nums.map(([n]) => n).join(', ')}`;
+  }
   function renderSettings() {
     const c = colorsNow();
     view.innerHTML = `
@@ -1226,15 +1247,15 @@
       </section>
       <section class="panel">
         <h2><span class="pill">Colors</span></h2>
-        <div class="looks">${Object.entries(LOOKS).map(([k, l]) => `<button class="look${theme.look === k ? ' on' : ''}" data-look="${k}" style="--a:${l.bg};--b:${l.pill};--c:${l['lav-ink']};--d:${l.text}"><span class="sw4"><i></i><i></i><i></i><i></i></span>${esc(l.name)}</button>`).join('')}</div>
-        <div class="tokens">${TOKENS.map(([k, label]) => `<label class="tok"><input type="color" value="${c[k]}" data-tok="${k}"><span>${esc(label)}</span>${theme.custom[theme.look]?.[k] ? `<button class="link" data-reset="${k}">reset</button>` : ''}</label>`).join('')}</div>
+        <div class="looks">${Object.entries(LOOKS).map(([k, l]) => `<button class="look${theme.look === k ? ' on' : ''}" data-look="${k}" style="--a:${l.bg};--b:${l.peach};--c:${l.lav};--d:${l.text}"><span class="sw4"><i></i><i></i><i></i><i></i></span>${esc(l.name)}</button>`).join('')}</div>
+        <div class="tokens">${TOKENS.map(([k, label]) => `<label class="tok"><input type="color" value="${c[k]}" data-tok="${k}"><span>${esc(tokenLabel(k, label))}</span>${theme.custom[theme.look]?.[k] ? `<button class="link" data-reset="${k}">reset</button>` : ''}</label>`).join('')}</div>
         <button class="btn ghost small" data-resetall ${Object.keys(theme.custom[theme.look] || {}).length ? '' : 'disabled'}>Reset “${esc(LOOKS[theme.look].name)}” colors</button>
       </section>
       <section class="panel">
         <h2><span class="pill">Fonts</span></h2>
-        <h3 class="sub">Handwriting (titles, pills, side notes)</h3>
+        <h3 class="sub">Headings</h3>
         <div class="fonts">${HAND_FONTS.map(f => `<button class="font-opt${theme.fonts.hand === f[0] ? ' on' : ''}" data-hand="${esc(f[0])}"><b style="font-family:${esc(f[1] ? stack(f) : 'var(--body)')}">Golden minute</b><small>${esc(f[0])}</small></button>`).join('')}</div>
-        <h3 class="sub">Text (everything else)</h3>
+        <h3 class="sub">Text</h3>
         <div class="fonts">${BODY_FONTS.map(f => `<button class="font-opt${theme.fonts.body === f[0] ? ' on' : ''}" data-body="${esc(f[0])}"><b style="font-family:${esc(stack(f))}">0.2 mL/kg epi</b><small>${esc(f[0])}</small></button>`).join('')}</div>
       </section>
       <section class="panel">
@@ -1303,7 +1324,7 @@
     unwatch = Store.watchNotes(list => { notes = list; refreshFlow(); });
     if (u && !u.sample) {
       const p = await Store.getPrefs();
-      if (p && p.theme) { Object.assign(theme, p.theme); theme.fonts ||= { hand: 'Patrick Hand', body: 'Nunito' }; saveTheme(false); }
+      if (p && p.theme) { const had = p.theme.v2; Object.assign(theme, p.theme); upgradeTheme(theme); saveTheme(!had); }
       if (p && p.edits) { edits = p.edits; applyEdits(); local.set('edits', edits); }
       else if (Object.keys(edits.cards).length + Object.keys(edits.groups).length + Object.keys(edits.meds).length || edits.layout) saveEdits();
       seedPrepNote(p);
