@@ -134,7 +134,6 @@ mark.lv { background: var(--lav); }
 .pill-count { background: var(--soft); border-radius: 999px; padding: 4px 12px; font-weight: 700; font-size: 14px; }
 .toggle { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
 .toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
-.vdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--ph-first); vertical-align: 2px; margin: 0 3px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ph-first) 30%, transparent); }
 table.mini { border-collapse: collapse; margin: 12px 0; font-weight: 700; border: 2px solid var(--text); border-radius: 4px; }
 table.mini caption { text-align: left; font-size: 13px; color: var(--muted); padding-bottom: 4px; font-weight: 700; }
 table.mini td, table.mini th { padding: 4px 14px; font-size: 16px; font-weight: 600; }
@@ -230,8 +229,6 @@ li.big {
 .aside::before { content: '✱'; position: absolute; left: 0; top: 1px; color: var(--lav-ink); font-size: 15px; }
 .timer-tag { display: inline-flex; gap: 6px; align-items: center; font-weight: 800; font-size: 13px; color: var(--text); background: var(--peach); border-radius: 999px; padding: 3px 12px; }
 .timer-tag svg { width: 15px; height: 15px; }
-.verify-btn { background: none; border: 0; font-weight: 700; color: var(--muted); cursor: pointer; padding: 8px 0 0; font-size: 14px; }
-.verify-text { background: var(--card); border-radius: 12px; padding: 8px 12px; font-size: 14px; margin: 6px 0 0; }
 .card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 
 /* Edit cards */
@@ -274,7 +271,7 @@ li.big {
 .card-foot:has(.pencil-btn):not(:has(a)) { margin-top: -38px; pointer-events: none; }
 .card-foot:not(:has(*)) { display: none; }  /* Study: no pencil, no link */
 .card-foot:has(.pencil-btn):not(:has(a)) .pencil-btn { pointer-events: auto; }
-.inner:has(> .card-foot:has(.pencil-btn):not(:has(a))) > :is(.lines, .reveal, .verify-btn, .verify-text):nth-last-child(3) { padding-right: 48px; }
+.inner:has(> .card-foot:has(.pencil-btn):not(:has(a))) > :is(.lines, .reveal):nth-last-child(3) { padding-right: 48px; }
 .pencil-btn {
   margin-left: auto; flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
   border: 1.5px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; transition: background .15s, color .15s;

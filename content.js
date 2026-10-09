@@ -7,7 +7,7 @@
    Little markup used in the text:
      ==words==   peach = values (doses, pressures, times)
      ++words++   lavender = the key action a step leads to (Start PPV, CPAP, epi route…)
-     **words**   bold                 [[verify]]  "check your book" dot
+     **words**   bold
    The 6 big steps are `groups`; each card is a substep. Each card has `lines` (the main points) and optional `asides` (the side
    notes with a * in the notes). In Study mode each line is hidden until tapped. */
 const NRP = {

@@ -9,7 +9,7 @@
     .replace(/==(.+?)==/g, '<mark class="pe">$1</mark>')
     .replace(/\+\+(.+?)\+\+/g, '<mark class="lv">$1</mark>')
     .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-    .replace(/\[\[verify\]\]/g, '<span class="vdot" title="Check this in your book"></span>');
+    .replace(/ ?\[\[verify\]\]/g, '');  // old check-your-book dots: hidden now that everything's checked
   const local = {
     get(k, d) { try { const v = localStorage.getItem('nrp-' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem('nrp-' + k, JSON.stringify(v)); } catch {} },
@@ -302,8 +302,6 @@
       if (act === 'all') { allOpen ? allIds.forEach(id => open.delete(id)) : allIds.forEach(id => open.add(id)); local.set('open2', [...open]); return renderCards(host); }
       const line = t.closest('[data-k].hidden');
       if (line) { revealed.add(line.dataset.k); line.classList.remove('hidden'); $('.pill-count', host).textContent = `${revealed.size} / ${total} checked`; return; }
-      const vd = t.closest('.verify-btn');
-      if (vd) { vd.nextElementSibling.hidden = !vd.nextElementSibling.hidden; return; }
       const nt = t.closest('[data-notes-toggle]');
       if (nt) return toggleNotes(nt.dataset.notesToggle);
       const head = t.closest('.big-head, .sub-head');
@@ -360,7 +358,6 @@
       <ul class="lines">${c.lines.map((l, j) => `<li class="line ${hid(c.id + j)}" data-k="${c.id}${j}"><span>${md(l)}</span></li>`).join('')}</ul>
       ${c.table ? `<div class="${hid(c.id + 't')}" data-k="${c.id}t"><table class="mini"><caption>${esc(c.table.caption)}</caption>${c.table.rows.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('')}</table></div>` : ''}
       ${(c.asides || []).map((a, j) => `<div class="${hid(c.id + 'a' + j)}" data-k="${c.id}a${j}"><p class="aside">${md(a)}</p></div>`).join('')}
-      ${c.verify ? `<button class="verify-btn"><span class="vdot"></span> Why the dot?</button><p class="verify-text" hidden>${esc(c.verify)}</p>` : ''}
       <div class="card-foot">
         ${c.link ? `<a class="btn ghost small" href="#/${c.link.tab}">${esc(c.link.label)} →</a>` : ''}
         ${study ? '' : `<button class="pencil-btn${hasContent(noteFor(c.id)) ? ' has' : ''}" data-notes-toggle="${c.id}" aria-label="My notes" title="My notes">${icons.pencil}</button>`}
@@ -390,8 +387,6 @@
           <textarea data-k="cards" data-id="${c.id}" data-f="lines" data-list rows="${Math.max(3, c.lines.length + 1)}">${lines(c.lines)}</textarea></label>
         <label>Side notes ✱ <small>(one per line, optional)</small>
           <textarea data-k="cards" data-id="${c.id}" data-f="asides" data-list rows="${Math.max(1, (c.asides || []).length + 1)}">${lines(c.asides)}</textarea></label>
-        <label>“Why the dot?” <small>(optional, explains a ● check-your-book dot)</small>
-          <textarea data-k="cards" data-id="${c.id}" data-f="verify" rows="1">${esc(c.verify || '')}</textarea></label>
       </div>`;
     host.innerHTML = `
       <div class="edit-bar">
@@ -403,7 +398,6 @@
         <button data-fmt="==" class="f-pe">Peach</button>
         <button data-fmt="++" class="f-lv">Lavender</button>
         <button data-fmt="**"><b>Bold</b></button>
-        <button data-fmt="dot"><span class="vdot"></span> Check dot</button>
       </div>
       ${NRP.groups.map((g, i) => `
         <section class="edit-group ph-${g.phase}">
@@ -437,7 +431,7 @@
           </div>
         </div>`).join('')}
       </section>
-      <p class="small">Formatting: ==peach== · ++lavender++ · **bold** · [[verify]] makes a check-your-book dot.</p>`;
+      <p class="small">Formatting: ==peach== · ++lavender++ · **bold**</p>`;
     const grow = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 2 + 'px'; };
     $$('textarea', host).forEach(grow);
     host.oninput = e => {
@@ -520,7 +514,7 @@
       const f = t.closest('[data-fmt]');
       if (f && lastField && document.body.contains(lastField)) {
         const el = lastField, a = el.selectionStart, b = el.selectionEnd, v = el.value;
-        const ins = f.dataset.fmt === 'dot' ? v.slice(a, b) + ' [[verify]]' : f.dataset.fmt + (v.slice(a, b) || 'text') + f.dataset.fmt;
+        const ins = f.dataset.fmt + (v.slice(a, b) || 'text') + f.dataset.fmt;
         el.value = v.slice(0, a) + ins + v.slice(b);
         el.focus(); el.setSelectionRange(a + ins.length, a + ins.length);
         el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1792,7 +1786,7 @@
       </section>
       <section class="panel light">
         <h2><span class="pill">About</span></h2>
-        <p class="small">Content typed from your own NRP notes (9th edition). A <span class="vdot"></span> dot means “double-check this in the book.” This is a study tool. At the bedside, follow your unit’s printed guides.</p>
+        <p class="small">Content from your own NRP notes, checked against the NRP 9th edition. This is a study tool. At the bedside, follow your unit’s printed guides.</p>
       </section>`;
     wireSignIn(view);
     const out = $('[data-out]'); if (out) out.onclick = () => Store.signOut();
