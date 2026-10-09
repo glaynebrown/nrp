@@ -246,7 +246,7 @@
         <div class="seg big" role="tablist">
           ${[['ref', 'Reference'], ['notes', 'Notes'], ['study', 'Study'], ['run', 'Run it']].map(([k, l]) => `<button data-mode="${k}" class="${flowMode === k ? 'on' : ''}">${l}</button>`).join('')}
         </div>
-        <p class="mode-hint${flowMode === 'ref' ? ' empty-hint' : ''}" data-fit>${{
+        <p class="mode-hint${flowMode === 'ref' ? ' empty-hint' : ''}" data-fit="12">${{
           ref: '',
           notes: 'Tap a note to open or close it.',
           study: 'Test your knowledge, then tap to reveal.',
@@ -273,7 +273,10 @@
     $$('.big-title, [data-fit]', host).forEach(t => {
       t.style.fontSize = '';
       const room = t.clientWidth, need = t.scrollWidth;
-      if (need > room) t.style.fontSize = Math.max(16, Math.floor(parseFloat(getComputedStyle(t).fontSize) * room / need)) + 'px';
+      const fs = parseFloat(getComputedStyle(t).fontSize), min = Math.min(fs, +t.dataset.fit || 16);  // data-fit="11" = smallest size
+      if (need > room) t.style.fontSize = Math.max(min, Math.floor(fs * room / need * 10) / 10) + 'px';
+      // Padding inside (e.g. highlights) doesn't shrink with the text, so check once more.
+      if (t.scrollWidth > t.clientWidth) { const f2 = parseFloat(t.style.fontSize); t.style.fontSize = Math.max(min, Math.floor(f2 * t.clientWidth / t.scrollWidth * 10) / 10 - 0.2) + 'px'; }
     });
   }
   let fitTimer;
@@ -399,6 +402,7 @@
         <button data-fmt="++" class="f-lv">Lavender</button>
         <button data-fmt="**"><b>Bold</b></button>
       </div>
+      <p class="fmt-key" data-fit="11"><b>Key:</b> <mark class="pe">values</mark> <code>==…==</code> · <mark class="lv">key actions</mark> <code>++…++</code> · <b>bold</b> <code>**…**</code></p>
       ${NRP.groups.map((g, i) => `
         <section class="edit-group ph-${g.phase}">
           <div class="eg-head">
@@ -431,7 +435,8 @@
           </div>
         </div>`).join('')}
       </section>
-      <p class="small">Formatting: ==peach== · ++lavender++ · **bold**</p>`;
+`;
+    fitTitles(host);
     const grow = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 2 + 'px'; };
     $$('textarea', host).forEach(grow);
     host.oninput = e => {
