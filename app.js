@@ -368,7 +368,7 @@
       </div>`;
     host.innerHTML = `
       <div class="edit-bar">
-        <div><b>Editing cards.</b> Changes save as you type and sync to your account.</div>
+        <div class="edit-note"><b>Editing cards</b> · auto-saves</div>
         <button class="btn primary small" data-act="editdone">Done</button>
       </div>
       <div class="fmt-bar" role="toolbar" aria-label="Format selected text">
@@ -622,7 +622,7 @@
     cpap: () => ({
       title: 'Labored breathing / cyanosis', phase: 'vent',
       body: `<ul class="lines"><li class="line">Position, clear airway PRN</li><li class="line">Pulse ox (right hand). Target now: <b data-spo2>${spo2Now()}</b></li>
-        <li class="line">No distress but low SpO₂ → ${md('++blow-by++')}</li><li class="line">Distress → ${md('++CPAP++ (PEEP ==5==)')}</li></ul>`,
+        <li class="line">No distress but low SpO₂ → ${md('++blow-by++')}</li><li class="line">Distress → ${md('++CPAP++ (==PEEP 5==)')}</li></ul>`,
       actions: [['Improving', () => go('routine', 'Improved with CPAP/O₂'), ''], ['Apnea or HR < 100', () => go('ppv', 'Deteriorated → PPV started'), 'primary']],
     }),
     ppv: () => ({
@@ -988,11 +988,11 @@
       </section>
       <section class="panel">
         <h2><span class="pill">FiO₂</span></h2>
-        <p>${md('**FiO₂** = **F**raction of **i**nspired **O₂**: the % oxygen in the gas you’re giving. Room air is ==21%==. The blender sets it.')}</p>
+        <p>${md('**FiO₂** = **F**raction of **i**nspired **O₂**: the % oxygen in the gas you’re giving. ==Room air is 21%==. The blender sets it.')}</p>
         <div class="fio2">${NRP.fio2.map(([g, v]) => `<div class="f-row"><span>${esc(g)}</span><b>${esc(v)}</b></div>`).join('')}</div>
         <ul class="lines tips-list">
           <li class="line">Starting point when you set up. Then <b>adjust</b> to hit the SpO₂ targets below.</li>
-          <li class="line">${md('++Compressions++ → FiO₂ ==100%==')}</li>
+          <li class="line">${md('++Compressions++ → ==FiO₂ 100%==')}</li>
         </ul>
       </section>
       <section class="panel light">

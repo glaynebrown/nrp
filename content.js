@@ -69,10 +69,10 @@ const NRP = {
       id: 'decision', phase: 'first', title: 'The decision',
       summary: 'Breathing? HR > 100?',
       lines: [
-        '**Breathing?** and **HR** ==> 100==?',
+        '**Breathing?** and ==HR > 100==?',
         'Yes + no resp. distress → check **SpO₂**. If low, can give ++blow-by++',
-        'Yes + resp. distress → can give ++CPAP++ to lessen work of breathing (PEEP ==5==)',
-        '**No** (apnea/gasping or HR ==< 100==) → ++Start PPV++',
+        'Yes + resp. distress → can give ++CPAP++ to lessen work of breathing (==PEEP 5==)',
+        '**No** (apnea/gasping or ==HR < 100==) → ++Start PPV++',
       ],
     },
     {
@@ -80,8 +80,8 @@ const NRP = {
       summary: 'Neopuff or BVM · 25/5 · 15 sec then HR check',
       lines: [
         'Neopuff or BVM to ventilate',
-        'Pressure ==25/5== (PIP 25 / PEEP 5)',
-        'Rate ==30–60== (“breathe… two… three”)',
+        '==Pressure 25/5== (PIP 25 / PEEP 5)',
+        '==Rate 30–60== (“breathe… two… three”)',
         '==15 sec==, then HR check',
       ],
       link: { tab: 'tips', label: 'See PEEP vs PIP' },
@@ -94,7 +94,7 @@ const NRP = {
         '**R**eposition head',
         '**S**uction',
         '**O**pen mouth',
-        '**P**ressure ↑ by ==5==',
+        '==**P**ressure ↑ by 5==',
         '**A**rtificial airway (consider intubation)',
       ],
       asides: [
@@ -106,11 +106,11 @@ const NRP = {
       id: 'cpr', phase: 'cpr', title: 'Start compressions',
       summary: '30 sec PPV w/ chest rise + HR < 60 → compressions',
       lines: [
-        'After ==30 sec== of PPV with chest rise, **HR** ==< 60==',
+        'After ==30 sec== of PPV with chest rise, ==HR < 60==',
         '++Start compressions++: “1-and-2-and-3-and-breathe”',
-        'Intubate with FiO₂ ==100%== + consider cardiac monitoring',
+        'Intubate with ==FiO₂ 100%== + consider cardiac monitoring',
         '==60 sec==, then HR check',
-        'HR ==> 60== → stop CPR + continue PPV',
+        '==HR > 60== → stop CPR + continue PPV',
       ],
       link: { tab: 'tips', label: 'Practice the rhythm' },
     },
