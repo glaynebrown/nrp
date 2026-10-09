@@ -27,7 +27,7 @@ const NRP = {
     { id: 'g-ppv', phase: 'vent', title: 'PPV', cards: ['ppv', 'mrsopa'] },
     { id: 'g-cpr', phase: 'cpr', title: 'CPR', cards: ['cpr', 'epi'] },
     { id: 'g-vol', phase: 'meds', title: 'Hypovolemia or PTX?', cards: ['volume'] },
-    { id: 'g-debrief', phase: 'after', title: 'Debrief', cards: ['debrief'] },
+    { id: 'g-debrief', phase: 'after', title: 'Debrief', cards: ['debrief'], simple: true },  // simple = just the number + one sentence
   ],
 
   cards: [
@@ -136,8 +136,8 @@ const NRP = {
     },
     {
       id: 'debrief', phase: 'after', title: 'Debrief',
-      summary: 'What went well · what to change',
-      lines: ['**Debrief** the team after every resuscitation'],
+      summary: '',
+      lines: ['Debrief the team after every resuscitation.'],
     },
   ],
 

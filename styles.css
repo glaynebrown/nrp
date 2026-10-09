@@ -178,6 +178,10 @@ li.big {
   flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center;
   background: var(--ph); color: var(--ph-on); font: 800 19px/1 var(--body);
 }
+.big.simple { border-left: 1px solid var(--line); }
+.simple-row { display: flex; align-items: center; gap: 14px; padding: 16px 18px 16px 14px; }
+.simple .bignum { background: none; color: var(--text); font-size: 23px; }
+.simple-text { margin: 0; font-size: 17px; line-height: 1.4; }
 .titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .big-title { font: 800 23px/1.2 var(--hand); color: var(--text); white-space: nowrap; overflow: hidden; }
 .subnames { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 14px; color: var(--muted); font-weight: 600; }
@@ -286,6 +290,7 @@ li.big {
 @media (max-width: 560px) {
   .big-head { gap: 10px; padding: 14px 12px 14px 10px; }
   .bignum { width: 38px; height: 38px; font-size: 24px; }
+  .simple-row { gap: 10px; padding: 14px 12px 14px 10px; }
   .big-title { font-size: 27px; }
   .big .timer-tag { display: none; }
   .big > .card-body > .inner { padding: 0 12px 0 12px; }

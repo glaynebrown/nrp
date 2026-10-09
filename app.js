@@ -256,7 +256,7 @@
   function renderCards(host) {
     if (editMode && flowMode === 'ref') return renderEditCards(host);
     const study = flowMode === 'study';
-    const total = NRP.cards.reduce((n, c) => n + c.lines.length + (c.table ? 1 : 0) + (c.asides || []).length, 0);
+    const total = NRP.groups.filter(g => !g.simple).flatMap(g => g.cards.map(id => CARD[id])).reduce((n, c) => n + c.lines.length + (c.table ? 1 : 0) + (c.asides || []).length, 0);
     const allIds = [...NRP.groups.map(g => g.id), ...NRP.groups.filter(g => g.cards.length > 1).flatMap(g => g.cards)];
     const allOpen = allIds.every(id => open.has(id));
     host.innerHTML = `
@@ -291,6 +291,10 @@
 
   function groupHtml(g, i, study) {
     const cards = g.cards.map(id => CARD[id]), single = cards.length === 1;
+    if (g.simple) return `
+    <li class="big simple" data-id="${g.id}">
+      <div class="simple-row"><span class="bignum">${i + 1}</span><p class="simple-text">${md(cards[0].lines[0] || '')}</p></div>
+    </li>`;
     const isOpen = study || open.has(g.id);
     return `
     <li class="big ph-${g.phase}${isOpen ? ' open' : ''}" data-id="${g.id}">
@@ -382,7 +386,7 @@
             ${mv('group', g.id, i, NRP.groups.length)}
           </div>
           <div class="eg-opts">
-            <label>Color <select data-k="groups" data-id="${g.id}" data-f="phase">${STEP_COLORS.map(([k, n]) => `<option value="${k}" ${g.phase === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+            ${g.simple ? '' : `<label>Color <select data-k="groups" data-id="${g.id}" data-f="phase">${STEP_COLORS.map(([k, n]) => `<option value="${k}" ${g.phase === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`}
             ${isEdited('groups', g.id) ? `<button class="link" data-reset="groups:${g.id}">Reset title + color</button>` : ''}
           </div>
           ${g.cards.map((id, j) => card(CARD[id], j, g)).join('')}
@@ -673,7 +677,7 @@
       ],
     }),
     volume: () => ({
-      title: 'Hypovolemia? or PTX?', phase: 'meds',
+      title: 'Hypovolemia or PTX?', phase: 'meds',
       body: `${weightPicker()}
         <div class="doses"><div class="dose"><span>NS or O-neg blood</span><b>${fmt(dose('ns'))} mL</b><small>10 mL/kg</small></div></div>
         <p class="aside">Unequal chest rise = needle decompression</p>`,
@@ -1262,7 +1266,7 @@
   // Step colors are named by the step(s) using them right now, e.g. "Step 2 · Golden minute".
   function tokenLabel(k, label) {
     if (!k.startsWith('st-')) return label;
-    const nums = NRP.groups.map((g, i) => [i + 1, g]).filter(([, g]) => g.phase === k.slice(3));
+    const nums = NRP.groups.map((g, i) => [i + 1, g]).filter(([, g]) => !g.simple && g.phase === k.slice(3));
     if (!nums.length) return `Not used · ${STEP_COLORS.find(([p]) => p === k.slice(3))[1]}`;
     if (nums.length === 1) return `Step ${nums[0][0]} · ${nums[0][1].title || 'Untitled'}`;
     return `Steps ${nums.map(([n]) => n).join(', ')}`;
