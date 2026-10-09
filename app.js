@@ -947,10 +947,9 @@
               <input type="range" min="20" max="40" step="5" value="25" data-pip aria-label="PIP">
               <button class="mini-btn" data-pipstep="5" aria-label="Raise PIP by 5">+5</button>
               <b data-pipv>25</b></div>
-            <div class="seg small-seg" data-maxwrap><button data-max="40" class="on">Term · max 40</button><button data-max="30">Preterm · max 30</button></div>
             <button class="btn primary squeeze" data-squeeze hidden>Hold to occlude (PIP)</button>
           </div>
-          <p class="small center" data-piphint>MR. SOPA “P”: raise PIP by 5 at a time until the chest rises.</p>
+          <p class="small center" data-piphint>MR. SOPA “P”: raise PIP by 5 at a time until the chest rises.<br><b>Max PIP:</b> 40 term · 30 preterm</p>
         </div>
       </section>
       <section class="panel">
@@ -1038,10 +1037,10 @@
       setPaused(false);
       mode = b.dataset.pm; $$('[data-pm]').forEach(x => x.classList.toggle('on', x === b));
       $('[data-squeeze]').hidden = mode !== 'hand'; playBtn.hidden = mode !== 'auto';
-      $('.pip-ctrl').hidden = $('[data-maxwrap]').hidden = $('[data-piphint]').hidden = mode === 'cpap';
+      $('.pip-ctrl').hidden = $('[data-piphint]').hidden = mode === 'cpap';
       target = 5; t0 = performance.now();
     });
-    // PIP: what you'd change in MR. SOPA. Capped at 40 (term) or 30 (preterm).
+    // PIP: what you'd change in MR. SOPA. Goes up to 40 (the term max; preterm max is 30).
     const pipIn = $('[data-pip]');
     function setPip(v) {
       // Always in steps of 5 (20, 25, 30…), like you'd change it in MR. SOPA.
@@ -1054,9 +1053,6 @@
     pipIn.oninput = () => setPip(+pipIn.value);
     $$('[data-pipstep]').forEach(b => b.onclick = () => setPip(pip + +b.dataset.pipstep));
     setPip(pip);
-    $$('[data-max]').forEach(b => b.onclick = () => {
-      maxPip = +b.dataset.max; $$('[data-max]').forEach(x => x.classList.toggle('on', x === b)); setPip(pip);
-    });
     const sq = $('[data-squeeze]');
     sq.onpointerdown = e => { e.preventDefault(); target = pip; sq.classList.add('held'); };
     const rel = () => { target = 5; sq.classList.remove('held'); };
