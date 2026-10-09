@@ -80,10 +80,9 @@ const NRP = {
       lines: [
         'Neopuff or BVM to ventilate',
         '==Pressure 25/5== (PIP 25 / PEEP 5)',
-        'Rate 30–60 [[verify]] (“breathe… two… three”)',
+        'Rate 30–60 (“breathe… two… three”)',
         '**15 sec**, then HR check',
       ],
-      verify: 'Your notes say 30–60. Double-check this against the 9th edition book. Earlier editions taught 40–60 breaths/min.',
       link: { tab: 'tips', label: 'See PEEP vs PIP' },
     },
     {
@@ -119,6 +118,7 @@ const NRP = {
       summary: '1:10,000 · IV/IO 0.2 mL/kg · ET 1 mL/kg',
       lines: [
         '++IV (UVC) / IO++ · 1:10,000 · ==0.2 mL/kg== · q 3–5 min',
+        'After each IV/IO push → **flush 3 mL NS**',
         'If unable to get a line (until you can) → ++ET++ · 1:10,000 · ==1 mL/kg==',
       ],
       asides: ['1:10,000 = **0.1 mg in every mL**.'],
@@ -145,7 +145,7 @@ const NRP = {
 
   // Weight-based doses, from the notes. mgPerMl = concentration.
   meds: [
-    { id: 'epiIV', name: 'Epi IV/IO', short: 'IV/IO epi', mlPerKg: 0.2, mgPerMl: 0.1, note: '1:10,000 · q 3–5 min' },
+    { id: 'epiIV', name: 'Epi IV/IO', short: 'IV/IO epi', mlPerKg: 0.2, mgPerMl: 0.1, note: '1:10,000 · q 3–5 min · flush 3 mL NS after' },
     { id: 'epiET', name: 'Epi ET', short: 'ET epi', mlPerKg: 1, mgPerMl: 0.1, note: '1:10,000 · only until a line is in' },
     { id: 'ns', name: 'Normal saline', short: 'NS', mlPerKg: 10, mgPerMl: null, note: 'or O-neg blood' },
   ],
@@ -155,6 +155,8 @@ const NRP = {
     ['1 min', 60, 65], ['2 min', 65, 70], ['3 min', 70, 75],
     ['4 min', 75, 80], ['5 min', 80, 85], ['10 min', 85, 95],
   ],
+  // Starting FiO₂ by gestation (9th edition).
+  fio2: [['≥ 35 wks', '21%'], ['32–34 wks', '21–30%'], ['< 32 wks', '≥ 30%']],
   ett: [
     ['< 1 kg', '< 28 wks', '2.5'],
     ['1–2 kg', '28–34 wks', '3.0'],

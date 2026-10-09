@@ -31,6 +31,8 @@
     settings: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>'),
     edit: svg('<path d="M12 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.4 2.6a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/>'),
     trash: svg('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>'),
+    pause: svg('<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'),
+    play: svg('<path d="M7 4.5v15l12-7.5z"/>'),
     pencil: svg('<path d="M4 20l1-5L16 4l4 4L9 19l-5 1z"/>'),
     clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
   };
@@ -626,12 +628,12 @@
       title: 'Epinephrine 1:10,000', phase: 'cpr',
       body: `${weightPicker()}
         <div class="doses">
-          <div class="dose"><span>IV / IO</span><b>${fmt(dose('epiIV'))} mL</b><small>${fmt(dose('epiIV') * 0.1)} mg</small></div>
+          <div class="dose"><span>IV / IO</span><b>${fmt(dose('epiIV'))} mL</b><small>${fmt(dose('epiIV') * 0.1)} mg · then flush 3 mL NS</small></div>
           <div class="dose"><span>ET (no line yet)</span><b>${fmt(dose('epiET'))} mL</b><small>${fmt(dose('epiET') * 0.1)} mg</small></div>
         </div>
         ${run.epiAt ? `<p class="small">Last epi <b data-since="${run.epiAt}">${mmss(since(run.epiAt))}</b> ago. Repeat q 3–5 min.</p>` : ''}`,
       actions: [
-        ['Gave IV/IO epi', () => { run.epiAt = now(); run.epiCount++; go('cpr2', `Epi IV/IO ${fmt(dose('epiIV'))} mL (dose ${run.epiCount})`); }, 'primary'],
+        ['Gave IV/IO epi + flush', () => { run.epiAt = now(); run.epiCount++; go('cpr2', `Epi IV/IO ${fmt(dose('epiIV'))} mL + 3 mL NS flush (dose ${run.epiCount})`); }, 'primary'],
         ['Gave ET epi', () => { run.epiAt = now(); run.epiCount++; go('cpr2', `Epi ET ${fmt(dose('epiET'))} mL (dose ${run.epiCount})`); }, ''],
       ],
     }),
@@ -860,6 +862,10 @@
       work: ['1,000 mg ÷ 10,000 mL = **0.1 mg/mL**'] }),
     () => ({ text: 'Which route gets the **bigger** mL/kg dose of epi?', choices: ['IV/IO', 'ET'], answer: 'ET',
       work: ['IV/IO = 0.2 mL/kg', 'ET = **1 mL/kg** (less is absorbed through the lungs)'] }),
+    () => ({ text: 'After an IV/IO epi push, flush with…', choices: ['1 mL NS', '3 mL NS', '10 mL/kg NS'], answer: '3 mL NS',
+      work: ['Flush **3 mL NS** after each IV/IO epi so the dose reaches the heart', '10 mL/kg is the volume dose for hypovolemia'] }),
+    () => ({ text: 'Starting FiO₂ for a **< 32 week** baby?', choices: ['21%', '21–30%', '≥ 30%', '100%'], answer: '≥ 30%',
+      work: ['≥ 35 wks: 21%', '32–34 wks: 21–30%', '< 32 wks: **≥ 30%**', 'Then adjust to the SpO₂ targets'] }),
     () => ({ text: '**PEEP** is the…', choices: ['Pop of air each breath', 'Little constant pressure between breaths'], answer: 'Little constant pressure between breaths',
       work: ['PEEP = “a little peep” = 5, keeps the alveoli open', 'PIP = “pop of air” = 25, the breath itself'] }),
     () => ({ text: 'On the Neopuff, **occluding the hole** gives you…', choices: ['PIP (25)', 'PEEP (5)'], answer: 'PIP (25)',
@@ -916,7 +922,7 @@
         <h2><span class="pill">PEEP vs PIP</span></h2>
         <div class="pp-cards">
           <div class="pp peep"><h3>PEEP <span>= 5</span></h3><p><b>P</b>ositive <b>E</b>nd-<b>E</b>xpiratory <b>P</b>ressure</p><p class="hand">“A little peep of pressure”</p><p>Constant pressure that keeps the alveoli open. Mask on face, hole open.</p></div>
-          <div class="pp pip"><h3>PIP <span>= 25</span></h3><p><b>P</b>eak <b>I</b>nspiratory <b>P</b>ressure</p><p class="hand">“Pop of air” = PPV</p><p>The breath itself. Occlude the hole.</p></div>
+          <div class="pp pip"><h3>PIP <span>≈ 25</span></h3><p><b>P</b>eak <b>I</b>nspiratory <b>P</b>ressure</p><p class="hand">“Pop of air” = PPV</p><p>The breath itself. Occlude the hole.</p></div>
         </div>
         <div class="neo">
           <div class="neo-modes seg">
@@ -926,7 +932,7 @@
             <svg class="gauge" viewBox="0 0 200 120" aria-label="Pressure gauge">
               <path d="M20 105 A80 80 0 0 1 180 105" class="g-track"/>
               <path d="M20 105 A80 80 0 0 1 180 105" class="g-peep" pathLength="40" stroke-dasharray="0 4 2 40"/>
-              <path d="M20 105 A80 80 0 0 1 180 105" class="g-pip" pathLength="40" stroke-dasharray="0 24 2 40"/>
+              <path d="M20 105 A80 80 0 0 1 180 105" class="g-pip" pathLength="40" stroke-dasharray="0 24 2 40" data-gpip/>
               ${[0, 10, 20, 30, 40].map(v => { const a = Math.PI * (1 - v / 40); return `<text x="${100 + 64 * Math.cos(a)}" y="${108 - 64 * Math.sin(a)}" class="g-num">${v}</text>`; }).join('')}
               <line x1="100" y1="105" x2="100" y2="35" class="needle" data-needle/>
               <circle cx="100" cy="105" r="6" class="hub"/>
@@ -935,9 +941,16 @@
           </div>
           <canvas class="wave" data-wave height="160"></canvas>
           <div class="neo-ctrl">
-            <label data-ratewrap>Rate <input type="range" min="30" max="60" step="5" value="40" data-rate> <b data-ratev>40</b>/min</label>
+            <button class="icon-btn play" data-play aria-label="Pause" title="Pause">${icons.pause}</button>
+            <div class="pip-ctrl">PIP
+              <button class="mini-btn" data-pipstep="-5" aria-label="Lower PIP by 5">−5</button>
+              <input type="range" min="20" max="40" step="5" value="25" data-pip aria-label="PIP">
+              <button class="mini-btn" data-pipstep="5" aria-label="Raise PIP by 5">+5</button>
+              <b data-pipv>25</b></div>
+            <div class="seg small-seg" data-maxwrap><button data-max="40" class="on">Term · max 40</button><button data-max="30">Preterm · max 30</button></div>
             <button class="btn primary squeeze" data-squeeze hidden>Hold to occlude (PIP)</button>
           </div>
+          <p class="small center" data-piphint>MR. SOPA “P”: raise PIP by 5 at a time until the chest rises.</p>
         </div>
       </section>
       <section class="panel">
@@ -945,6 +958,15 @@
         <p>${md('3 compressions : 1 breath. “**One**-and-**Two**-and-**Three**-and-**Breathe**-and.” That’s ==90 compressions + 30 breaths== a minute (2 sec per cycle).')}</p>
         <div class="beat big paused" data-beat><span>1</span><span>2</span><span>3</span><span class="br">Breathe</span></div>
         <div class="row-end"><label class="toggle"><input type="checkbox" data-sound> Click sound</label><button class="btn primary small" data-beatbtn>Start</button></div>
+      </section>
+      <section class="panel">
+        <h2><span class="pill">FiO₂</span></h2>
+        <p>${md('**FiO₂** = **F**raction of **i**nspired **O₂**: the % oxygen in the gas you’re giving. Room air is ==21%==. The blender sets it.')}</p>
+        <div class="fio2">${NRP.fio2.map(([g, v]) => `<div class="f-row"><span>${esc(g)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+        <ul class="lines tips-list">
+          <li class="line">Starting point when you set up. Then <b>adjust</b> to hit the SpO₂ targets below.</li>
+          <li class="line">${md('Compressions → ++FiO₂ 100%++')}</li>
+        </ul>
       </section>
       <section class="panel light">
         <h2><span class="pill">Target SpO₂</span> <span class="vdot" title="Check your book"></span></h2>
@@ -961,7 +983,7 @@
 
   function neopuff() {
     const canvas = $('[data-wave]'), ctx = canvas.getContext('2d');
-    let mode = 'auto', target = 5, p = 5, rate = 40, t0 = performance.now(), hist = [], raf, last = 0;
+    let mode = 'auto', target = 5, p = 5, rate = 40, pip = 25, maxPip = 40, t0 = performance.now(), hist = [], raf, last = 0;
     const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     function size() { const dpr = devicePixelRatio || 1; canvas.width = canvas.clientWidth * dpr; canvas.height = 160 * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
     size(); const ro = new ResizeObserver(size); ro.observe(canvas);
@@ -970,7 +992,7 @@
       const el = (ts - t0) / 1000;
       if (mode === 'auto') {
         const cyc = 60 / rate, ph = (el % cyc) / cyc;
-        target = ph < 0.33 ? 25 : 5;
+        target = ph < 0.33 ? pip : 5;
         word.textContent = ph < 0.33 ? 'Breathe…' : ph < 0.66 ? 'two…' : 'three…';
       } else if (mode === 'cpap') { target = 5; word.textContent = 'CPAP · PEEP only'; }
       else word.textContent = target > 5 ? 'Breathe!' : 'release…';
@@ -985,10 +1007,10 @@
       n.setAttribute('x2', 100 + 70 * Math.cos(ang)); n.setAttribute('y2', 105 - 70 * Math.sin(ang));
       $('[data-p]').textContent = Math.round(p);
       // waveform
-      const H = 160, y = v => H - 14 - (v / 32) * (H - 28);
+      const H = 160, y = v => H - 14 - (v / 42) * (H - 28);
       ctx.clearRect(0, 0, W, H);
       ctx.font = '700 12px ' + getComputedStyle(document.body).fontFamily;
-      [[25, '--ph-meds', 'PIP 25'], [5, '--ph-first', 'PEEP 5']].forEach(([v, c, l]) => {
+      [[pip, '--ph-meds', 'PIP ' + pip], [5, '--ph-first', 'PEEP 5']].forEach(([v, c, l]) => {
         ctx.strokeStyle = css(c); ctx.setLineDash([5, 5]); ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(0, y(v)); ctx.lineTo(W, y(v)); ctx.stroke(); ctx.setLineDash([]);
         ctx.fillStyle = css(c); ctx.fillText(l, W - 52, y(v) - 6);
@@ -999,13 +1021,44 @@
     }
     raf = requestAnimationFrame(frame);
     anims.push(() => { cancelAnimationFrame(raf); ro.disconnect(); });
+    // Pause freezes the gauge and wave right where they are; play picks up the rhythm from there.
+    let paused = false, pausedAt = 0;
+    const playBtn = $('[data-play]');
+    function setPaused(on) {
+      if (on === paused) return;
+      paused = on;
+      if (on) { cancelAnimationFrame(raf); pausedAt = performance.now(); word.textContent = 'Paused'; }
+      else { t0 += performance.now() - pausedAt; last = 0; raf = requestAnimationFrame(frame); }
+      playBtn.innerHTML = on ? icons.play : icons.pause;
+      playBtn.setAttribute('aria-label', on ? 'Play' : 'Pause'); playBtn.title = on ? 'Play' : 'Pause';
+      playBtn.classList.toggle('paused', on);
+    }
+    playBtn.onclick = () => setPaused(!paused);
     $$('[data-pm]').forEach(b => b.onclick = () => {
+      setPaused(false);
       mode = b.dataset.pm; $$('[data-pm]').forEach(x => x.classList.toggle('on', x === b));
-      $('[data-squeeze]').hidden = mode !== 'hand'; $('[data-ratewrap]').hidden = mode !== 'auto'; target = 5; t0 = performance.now();
+      $('[data-squeeze]').hidden = mode !== 'hand'; playBtn.hidden = mode !== 'auto';
+      $('.pip-ctrl').hidden = $('[data-maxwrap]').hidden = $('[data-piphint]').hidden = mode === 'cpap';
+      target = 5; t0 = performance.now();
     });
-    $('[data-rate]').oninput = e => { rate = +e.target.value; $('[data-ratev]').textContent = rate; };
+    // PIP: what you'd change in MR. SOPA. Capped at 40 (term) or 30 (preterm).
+    const pipIn = $('[data-pip]');
+    function setPip(v) {
+      // Always in steps of 5 (20, 25, 30…), like you'd change it in MR. SOPA.
+      pip = Math.max(20, Math.min(maxPip, Math.round(v / 5) * 5)); pipIn.value = pip; pipIn.max = maxPip;
+      $$('[data-pipstep]').forEach(b => b.disabled = (+b.dataset.pipstep < 0 ? pip <= 20 : pip >= maxPip));
+      $('[data-pipv]').textContent = pip;
+      $('[data-gpip]').setAttribute('stroke-dasharray', `0 ${pip - 1} 2 40`);
+      if (mode === 'hand' && target > 5) target = pip;
+    }
+    pipIn.oninput = () => setPip(+pipIn.value);
+    $$('[data-pipstep]').forEach(b => b.onclick = () => setPip(pip + +b.dataset.pipstep));
+    setPip(pip);
+    $$('[data-max]').forEach(b => b.onclick = () => {
+      maxPip = +b.dataset.max; $$('[data-max]').forEach(x => x.classList.toggle('on', x === b)); setPip(pip);
+    });
     const sq = $('[data-squeeze]');
-    sq.onpointerdown = e => { e.preventDefault(); target = 25; sq.classList.add('held'); };
+    sq.onpointerdown = e => { e.preventDefault(); target = pip; sq.classList.add('held'); };
     const rel = () => { target = 5; sq.classList.remove('held'); };
     sq.onpointerup = rel; sq.onpointerleave = rel; sq.onpointercancel = rel;
   }
