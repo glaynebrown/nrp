@@ -77,12 +77,12 @@ const NRP = {
     },
     {
       id: 'ppv', phase: 'vent', title: 'Start PPV',
-      summary: 'Neopuff or BVM · 25/5 · 15 sec then HR check',
+      summary: 'Neopuff or BVM · 25/5 · HR rising by 15–30 sec?',
       lines: [
-        'Neopuff or BVM to ventilate',
+        'Neopuff or BVM · face mask or ++laryngeal mask++',
         '==Pressure 25/5== (PIP 25 / PEEP 5)',
         '==Rate 30–60== (“breathe… two… three”)',
-        '==15 sec==, then HR check',
+        'HR not rising in ==15–30 sec== and no chest movement → MR. SOPA',
       ],
       link: { tab: 'tips', label: 'See PEEP vs PIP' },
     },
@@ -98,6 +98,7 @@ const NRP = {
         '**A**rtificial airway (consider intubation)',
       ],
       asides: [
+        'Do the steps in the order most likely to help.',
         'Stay here until chest rise!',
         'Chest rise with ventilations → ==15 more sec== PPV, then HR check (==30 sec total==).',
       ],
@@ -141,8 +142,8 @@ const NRP = {
     },
   ],
 
-  // Gestation → estimated weight, for the quick buttons in Med math and Run it.
-  weights: [['28 wks', 1], ['32 wks', 2], ['37 wks', 3]],
+  // Gestation → estimated weight (middle of the 9th ed range), for the quick buttons in Med math and Run it.
+  weights: [['28 wks', 1], ['32 wks', 1.3], ['37 wks', 2.2], ['40 wks', 2.8]],
 
   // Weight-based doses, from the notes. mgPerMl = concentration.
   meds: [
@@ -151,16 +152,19 @@ const NRP = {
     { id: 'ns', name: 'Normal saline', short: 'NS', mlPerKg: 10, mgPerMl: null, note: 'or O-neg blood' },
   ],
 
-  // Less focus: reference only. Standard NRP values; verify with your book/unit guide.
+  // Target SpO₂ (9th edition: starts at 2 min).
   spo2: [
-    ['1 min', 60, 65], ['2 min', 65, 70], ['3 min', 70, 75],
+    ['2 min', 65, 70], ['3 min', 70, 75],
     ['4 min', 75, 80], ['5 min', 80, 85], ['10 min', 85, 95],
   ],
   // Starting FiO₂ by gestation (9th edition).
   fio2: [['≥ 35 wks', '21%'], ['32–34 wks', '21–30%'], ['< 32 wks', '≥ 30%']],
+  // ETT (9th edition): [gestation, weight, tip-to-gum depth, tube size mm ID]. * = a 2.0 mm tube (optional) may be considered.
   ett: [
-    ['< 1 kg', '< 28 wks', '2.5'],
-    ['1–2 kg', '28–34 wks', '3.0'],
-    ['> 2 kg', '> 34 wks', '3.5'],
+    ['< 23 wks', '< 500 g', '5.0–5.5 cm', '2.5*'], ['23–24 wks', '500–600 g', '5.5 cm', '2.5*'],
+    ['25–26 wks', '700–800 g', '6.0 cm', '2.5*'], ['27–29 wks', '900–1,000 g', '6.5 cm', '2.5'],
+    ['30–32 wks', '1,100–1,400 g', '7.0 cm', '2.5–3.0'], ['33–34 wks', '1,500–1,800 g', '7.5 cm', '3.0'],
+    ['35–37 wks', '1,900–2,400 g', '8.0 cm', '3.0–3.5'], ['38–40 wks', '2,500–3,100 g', '8.5 cm', '3.5'],
+    ['41–43 wks', '3,200–4,200 g', '9.0 cm', '3.5'],
   ],
 };

@@ -141,6 +141,8 @@ table.mini td, table.mini th { padding: 4px 14px; font-size: 16px; font-weight: 
 table.mini th { font-family: inherit; font-size: 13px; font-weight: 800; color: var(--muted); text-align: left; }
 table.mini.wide { width: 100%; border: 0; }
 table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
+table.mini.ett td, table.mini.ett th { padding: 5px 4px; font-size: 14px; white-space: nowrap; }
+table.mini.ett th { font-size: 12px; }
 
 /* ---------- Algorithm ---------- */
 .flow-top { text-align: center; margin-bottom: 10px; }

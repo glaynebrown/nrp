@@ -611,7 +611,7 @@
     if (!run.start) return null;
     const min = since(run.start) / 60;
     const row = [...NRP.spo2].reverse().find(r => min >= parseInt(r[0]));
-    return row ? `${row[1]}–${row[2]}%` : 'not yet (under 1 min)';
+    return row ? `${row[1]}–${row[2]}%` : 'no target yet (under 2 min)';
   };
 
   const runCard = id => CARD[id] || baseOf('cards', id);
@@ -654,7 +654,7 @@
       actions: [['Improving', () => go('routine', 'Improved with CPAP/O₂'), ''], ['Apnea or HR < 100', () => go('ppv', 'Deteriorated → PPV started'), 'primary']],
     }),
     ppv: () => ({
-      title: 'PPV', phase: 'vent', countdown: { from: run.stepAt, secs: 15, label: 'First 15 sec of PPV', done: 'Check chest rise + HR' },
+      title: 'PPV', phase: 'vent', countdown: { from: run.stepAt, secs: 15, label: 'First 15–30 sec of PPV', done: 'Check chest rise + HR' },
       body: `<ul class="lines"><li class="line">${md('Neopuff or BVM · ==25/5==')}</li><li class="line">“Breathe… two… three”</li><li class="line">Pulse ox on. Target now: <b data-spo2>${spo2Now()}</b></li></ul>`,
       actions: [['No chest rise', () => go('mrsopa', 'No chest rise → MR. SOPA'), ''], ['Chest rising', () => go('ppv30', 'Chest rising with PPV'), 'primary']],
     }),
@@ -674,7 +674,7 @@
     }),
     ppvcont: () => ({
       title: 'Continue PPV', phase: 'vent', countdown: { from: run.stepAt, secs: 30, label: 'Reassess in', done: 'Check HR' },
-      body: `<ul class="lines"><li class="line">MR. SOPA PRN</li><li class="line">Consider alternative airway</li></ul>`,
+      body: `<ul class="lines"><li class="line">MR. SOPA PRN</li><li class="line">Consider intubation or laryngeal mask</li></ul>`,
       actions: [['HR ≥ 100', () => go('post', 'HR ≥ 100'), ''], ['Still 60–99', () => go('ppvcont', 'HR still 60–99'), ''], ['HR < 60', () => go('cpr', 'HR < 60 → compressions'), 'danger']],
     }),
     cpr: () => ({
@@ -726,7 +726,8 @@
   function weightPicker() {
     return `<div class="weight">
       <label>Weight <input type="number" inputmode="decimal" step="0.1" min="0.3" max="6" value="${run.weight}" data-weight> kg</label>
-      <div class="chips">${NRP.weights.map(([wk, kg]) => `<button class="chip" data-kg="${kg}">${wk}</button>`).join('')}</div>
+      <p class="small">Use the real weight from the warmer scale. Estimates:</p>
+      <div class="chips">${NRP.weights.map(([wk, kg]) => `<button class="chip" data-kg="${kg}">${wk} ≈ ${kg} kg</button>`).join('')}</div>
     </div>`;
   }
   function checklist(items) {
@@ -885,6 +886,7 @@
       <div class="weight big">
         <label>Baby’s weight <input type="number" inputmode="decimal" step="0.1" min="0.3" max="6" value="${calcW}" data-cw> kg</label>
         <input type="range" min="0.4" max="5" step="0.1" value="${calcW}" data-cr aria-label="Weight slider">
+        <p class="small">Use the real weight from the warmer scale. Estimates:</p>
         <div class="chips">${NRP.weights.map(([wk, kg]) => `<button class="chip" data-kg="${kg}">${wk} ≈ ${kg} kg</button>`).join('')}</div>
       </div>
       <div class="calc-cards">${NRP.meds.map(m => {
@@ -1053,14 +1055,14 @@
         </ul>
       </section>
       <section class="panel light">
-        <h2><span class="pill">Target SpO₂</span> <span class="vdot" title="Check your book"></span></h2>
+        <h2><span class="pill">Target SpO₂</span></h2>
         <p class="small">Pre-ductal (right hand). Reference only. Follow your printed guide.</p>
         <div class="spo2">${NRP.spo2.map(([t, lo, hi]) => `<div class="s-row"><span>${t}</span><div class="s-bar"><i style="left:${(lo - 50) * 2}%;width:${(hi - lo) * 2}%"></i></div><b>${lo}–${hi}%</b></div>`).join('')}</div>
       </section>
       <section class="panel light">
-        <h2><span class="pill">ETT size</span> <span class="vdot" title="Check your book"></span></h2>
-        <table class="mini wide"><tr><th>Weight</th><th>Gestation</th><th>ETT (mm ID)</th></tr>${NRP.ett.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td><b>${r[2]}</b></td></tr>`).join('')}</table>
-        <p class="small">Depth: nasal-tragus length (NTL) + 1 cm, or the gestational-age depth table. Reference only. Follow your printed guide.</p>
+        <h2><span class="pill">ETT size + depth</span></h2>
+        <table class="mini wide ett"><tr><th>Gestation</th><th>Weight</th><th>Depth</th><th>Size</th></tr>${NRP.ett.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td><b>${r[3]}</b></td></tr>`).join('')}</table>
+        <p class="small">Depth = tip of the tube to the upper gum, midline. Size in mm ID. *A 2.0 mm tube (optional) may be considered. Reference only. Follow your printed guide.</p>
       </section>`;
     neopuff(); beatTrainer();
   }
