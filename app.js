@@ -927,7 +927,7 @@
         <div class="neo">
           <button class="icon-btn play" data-play aria-label="Pause" title="Pause">${icons.pause}</button>
           <div class="neo-modes seg">
-            <button data-pm="auto" class="on">Auto “breathe-2-3”</button><button data-pm="hand">You squeeze</button><button data-pm="cpap">CPAP only</button>
+            <button data-pm="auto" class="on"><span class="lg">Auto “breathe-2-3”</span><span class="sm">Auto</span></button><button data-pm="hand"><span class="lg">You squeeze</span><span class="sm">Squeeze</span></button><button data-pm="cpap"><span class="lg">CPAP only</span><span class="sm">CPAP</span></button>
           </div>
           <div class="neo-row">
             ${manometer()}

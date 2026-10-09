@@ -121,6 +121,12 @@ mark.lv { background: var(--lav); }
 .seg button { border: 0; background: none; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-weight: 700; color: var(--muted); }
 .seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgb(0 0 0 / .1); }
 .seg.big button { padding: 9px 20px; font-size: 16px; }
+.seg button { white-space: nowrap; }
+/* Phones: the four Algorithm modes share the full width on one line. */
+@media (max-width: 520px) {
+  .flow-top .seg.big { display: flex; width: 100%; }
+  .flow-top .seg.big button { flex: 1 1 auto; padding: 8px 4px; font-size: 15px; }
+}
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 12px; font-weight: 700; cursor: pointer; font-size: 14px; }
 .chip:hover { background: var(--soft); }
@@ -409,6 +415,7 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .hand { font: 21px var(--hand); }
 .neo { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; position: relative; }
 .neo > .play { position: absolute; top: 0; left: 0; }
+.neo-modes .sm { display: none; }
 .neo-modes { flex-wrap: wrap; justify-content: center; }
 .neo-row { display: flex; gap: 20px; align-items: center; }
 .gauge { width: 230px; filter: drop-shadow(0 4px 10px rgb(0 0 0 / .15)); }
@@ -455,6 +462,14 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .s-bar { height: 14px; background: var(--soft); border-radius: 99px; position: relative; }
 .s-bar i { position: absolute; top: 0; bottom: 0; background: var(--ph-after); border-radius: 99px; }
 @media (max-width: 560px) {
+  /* Phones: dial on top, settings side by side under it, short mode names. */
+  .neo-modes .lg { display: none; } .neo-modes .sm { display: inline; }
+  .neo-modes { margin-left: 44px; flex-wrap: nowrap; }
+  .neo-modes button { padding: 6px 10px; font-size: 14px; }
+  .neo-row { flex-direction: column; gap: 10px; width: 100%; }
+  .readout { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; width: 100%; gap: 8px; }
+  .readout .pip-note { order: -1; width: 100%; text-align: center; padding: 0; margin: 0; }
+  .readout .word { width: 100%; text-align: center; padding: 0; }
   .pp-cards { grid-template-columns: 1fr; }
   .neo-row { gap: 8px; }
   .gauge { width: 190px; }
