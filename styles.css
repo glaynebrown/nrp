@@ -407,7 +407,8 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .pp.peep { background: var(--peach); }
 .pp.pip { background: var(--lav); }
 .hand { font: 21px var(--hand); }
-.neo { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.neo { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; position: relative; }
+.neo > .play { position: absolute; top: 0; left: 0; }
 .neo-modes { flex-wrap: wrap; justify-content: center; }
 .neo-row { display: flex; gap: 20px; align-items: center; }
 .gauge { width: 230px; filter: drop-shadow(0 4px 10px rgb(0 0 0 / .15)); }
@@ -423,10 +424,17 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .gauge .ndl { fill: #111; }
 .gauge .hub { fill: #111; } .gauge .hub-dot { fill: #555; }
 .gauge .mk-pip { fill: var(--ph-meds); } .gauge .mk-peep { fill: var(--ph-first); }
-.readout { display: flex; flex-direction: column; min-width: 120px; }
-.readout b { font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
-.readout small { color: var(--muted); font-weight: 700; }
-.readout .word { font: 26px var(--hand); color: var(--lav-ink); min-height: 34px; }
+.readout { display: flex; flex-direction: column; gap: 8px; min-width: 150px; }
+/* Your two settings, shown steady (the needle + "breathe… two… three" show the rhythm). */
+.set { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 14px; }
+.set-name { font-weight: 800; font-size: 14px; letter-spacing: .06em; min-width: 42px; }
+.set b { font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
+.set-pip { background: var(--lav); }
+.set-pip b, .set-pip .set-name { color: var(--ph-meds); }
+.set-peep { background: var(--peach); }
+.set-peep b, .set-peep .set-name { color: color-mix(in srgb, var(--ph-first) 70%, var(--text)); }
+.set .mini-btn { font-size: 18px; }
+.readout .word { font: 26px var(--hand); color: var(--lav-ink); min-height: 34px; padding-left: 12px; }
 .wave { width: 100%; height: 160px; background: var(--soft); border-radius: 14px; }
 .neo-ctrl { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .neo-ctrl label { display: flex; gap: 8px; align-items: center; font-weight: 700; }
@@ -440,10 +448,6 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
 .f-row span { font-weight: 700; color: var(--muted); font-size: 14px; }
 .f-row b { font-size: 26px; color: var(--lav-ink); }
 .tips-list .line { font-size: 16px; line-height: 1.5; }
-.pip-ctrl { display: flex; gap: 8px; align-items: center; font-weight: 700; }
-.pip-ctrl input { accent-color: var(--ph-meds); width: 120px; }
-.pip-ctrl .mini-btn { width: 38px; font-size: 13px; }
-.pip-ctrl b { min-width: 24px; font-size: 20px; color: var(--ph-meds); }
 .small-seg button { font-size: 13px; padding: 5px 10px; }
 .s-row { display: grid; grid-template-columns: 60px 1fr 80px; gap: 10px; align-items: center; font-weight: 700; }
 .s-bar { height: 14px; background: var(--soft); border-radius: 99px; position: relative; }
@@ -452,7 +456,8 @@ table.mini.wide td, table.mini.wide th { border-bottom: 1px solid var(--line); }
   .pp-cards { grid-template-columns: 1fr; }
   .neo-row { gap: 8px; }
   .gauge { width: 190px; }
-  .readout b { font-size: 32px; }
+  .set b { font-size: 28px; min-width: 32px; }
+  .readout { min-width: 0; }
 }
 
 /* ---------- Notes ---------- */

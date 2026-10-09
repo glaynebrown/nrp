@@ -925,21 +925,25 @@
           <div class="pp pip"><h3>PIP <span>≈ 25</span></h3><p><b>P</b>eak <b>I</b>nspiratory <b>P</b>ressure</p><p class="hand">“Pop of air” = PPV</p><p>The breath itself. Occlude the hole.</p></div>
         </div>
         <div class="neo">
+          <button class="icon-btn play" data-play aria-label="Pause" title="Pause">${icons.pause}</button>
           <div class="neo-modes seg">
             <button data-pm="auto" class="on">Auto “breathe-2-3”</button><button data-pm="hand">You squeeze</button><button data-pm="cpap">CPAP only</button>
           </div>
           <div class="neo-row">
             ${manometer()}
-            <div class="readout"><b data-p>5</b><small>cm H₂O</small><span class="word" data-word></span></div>
+            <div class="readout">
+              <div class="set set-pip" data-set="pip">
+                <span class="set-name">PIP</span>
+                <button class="mini-btn" data-pipstep="-5" aria-label="Lower PIP by 5">−</button>
+                <b data-pipv>25</b>
+                <button class="mini-btn" data-pipstep="5" aria-label="Raise PIP by 5">+</button>
+              </div>
+              <div class="set set-peep" data-set="peep"><span class="set-name">PEEP</span><b>5</b></div>
+              <span class="word" data-word></span>
+            </div>
           </div>
           <canvas class="wave" data-wave height="160"></canvas>
           <div class="neo-ctrl">
-            <button class="icon-btn play" data-play aria-label="Pause" title="Pause">${icons.pause}</button>
-            <div class="pip-ctrl">PIP
-              <button class="mini-btn" data-pipstep="-5" aria-label="Lower PIP by 5">−5</button>
-              <input type="range" min="20" max="40" step="5" value="25" data-pip aria-label="PIP">
-              <button class="mini-btn" data-pipstep="5" aria-label="Raise PIP by 5">+5</button>
-              <b data-pipv>25</b></div>
             <button class="btn primary squeeze" data-squeeze hidden>Hold to occlude (PIP)</button>
           </div>
           <p class="small center" data-piphint>MR. SOPA “P”: raise PIP by 5 at a time until the chest rises.<br><b>Max PIP:</b> 40 term · 30 preterm</p>
@@ -1037,7 +1041,6 @@
       lastN = ts;
       const n = $('[data-needle]'); if (!n) return;
       n.setAttribute('transform', `rotate(${dialAngle(nVal)} 120 120)`);
-      $('[data-p]').textContent = Math.round(p);
       // waveform
       const H = 160, y = v => H - 14 - (v / 42) * (H - 28);
       ctx.clearRect(0, 0, W, H);
@@ -1070,20 +1073,18 @@
       setPaused(false);
       mode = b.dataset.pm; $$('[data-pm]').forEach(x => x.classList.toggle('on', x === b));
       $('[data-squeeze]').hidden = mode !== 'hand'; playBtn.hidden = mode !== 'auto';
-      $('.pip-ctrl').hidden = $('[data-piphint]').hidden = mode === 'cpap';
+      $('.set-pip').hidden = $('[data-piphint]').hidden = mode === 'cpap';
       target = 5; t0 = performance.now();
     });
     // PIP: what you'd change in MR. SOPA. Goes up to 40 (the term max; preterm max is 30).
-    const pipIn = $('[data-pip]');
     function setPip(v) {
       // Always in steps of 5 (20, 25, 30…), like you'd change it in MR. SOPA.
-      pip = Math.max(20, Math.min(maxPip, Math.round(v / 5) * 5)); pipIn.value = pip; pipIn.max = maxPip;
+      pip = Math.max(20, Math.min(maxPip, Math.round(v / 5) * 5));
       $$('[data-pipstep]').forEach(b => b.disabled = (+b.dataset.pipstep < 0 ? pip <= 20 : pip >= maxPip));
       $('[data-pipv]').textContent = pip;
       $('[data-gpip]').setAttribute('transform', `rotate(${dialAngle(pip)} 120 120)`);
       if (mode === 'hand' && target > 5) target = pip;
     }
-    pipIn.oninput = () => setPip(+pipIn.value);
     $$('[data-pipstep]').forEach(b => b.onclick = () => setPip(pip + +b.dataset.pipstep));
     setPip(pip);
     const sq = $('[data-squeeze]');
