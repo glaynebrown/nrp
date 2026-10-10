@@ -122,6 +122,11 @@ mark.lv { background: var(--lav); }
 .seg button { border: 0; background: none; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-weight: 700; color: var(--muted); }
 .seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgb(0 0 0 / .1); }
 .seg.big button { padding: 9px 20px; font-size: 16px; }
+/* Sub-tabs (Cover-up / Quiz, Guided / Recall / Free run): plain text, sage underline on the chosen one */
+.subtabs { display: flex; justify-content: center; gap: 26px; border-bottom: 1px solid var(--line); margin: 0 0 14px; }
+.subtabs button { background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; padding: 8px 2px 7px;
+  font: inherit; font-size: 16px; font-weight: 700; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.subtabs button.on { color: var(--title); border-bottom-color: var(--title); }
 .seg button { white-space: nowrap; }
 /* Phones: the four Algorithm modes share the full width on one line. */
 @media (max-width: 520px) {
@@ -145,10 +150,8 @@ table.mini.ett th { font-size: 12px; }
 
 /* ---------- Algorithm ---------- */
 .flow-top { text-align: center; margin-bottom: 10px; }
-.mode-hint { color: var(--muted); margin: 10px 0 0; white-space: nowrap; overflow: hidden; }
 .flow-tools { display: flex; justify-content: flex-end; gap: 8px; align-items: center; margin-bottom: 10px; }
 .flow-tools.ref-tools { justify-content: space-between; padding: 0 4px; }
-.mode-hint.empty-hint { display: none; }
 .icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; }
 .icon-btn:hover { background: var(--soft); color: var(--text); }
 .icon-btn svg { width: 18px; height: 18px; }
@@ -377,12 +380,15 @@ li.big {
 .beat.big span.now { background: var(--text); color: var(--card); transform: scale(1.05); }
 .beat.big span.br.now { background: var(--lav-ink); }
 /* ---------- Run it: Scenario ---------- */
-.run-modes { display: flex; width: max-content; margin: 0 auto 14px; }
+.subtabs.run-modes { margin-bottom: 8px; }
+.run-what { text-align: center; color: var(--muted); font-size: 14px; margin: 0 auto 14px; max-width: 420px; }
 .chip.on { background: var(--text); color: var(--card); border-color: var(--text); }
 .scen-pick { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-weight: 800; }
 .scen-pick small { font-weight: 600; color: var(--muted); font-size: 14px; }
-.seg.sev { display: flex; width: 100%; }
-.seg.sev button { flex: 1; padding: 7px 4px; font-size: 14px; }
+/* Severity = chips (a setting you pick), lavender when chosen */
+.chips.sev { flex-wrap: nowrap; }
+.chips.sev .chip { flex: 1 1 auto; padding: 6px 4px; text-align: center; color: var(--muted); }
+.chips.sev .chip.on { background: var(--lav); border-color: var(--lav-ink); color: var(--text); }
 .asks { display: grid; gap: 8px; margin: 10px 0 16px; }
 .ask { background: var(--soft); border-radius: 14px; }
 .ask-q { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 12px; font-size: 17px; font-weight: 800; text-align: left; cursor: pointer; color: var(--text); }
@@ -519,8 +525,6 @@ li.big {
 .result ol { margin: 6px 0 0; padding-left: 22px; }
 
 /* ---------- Quiz (Study → Quiz) ---------- */
-.study-switch { display: flex; justify-content: center; margin: 2px 0 14px; }
-.study-switch .seg button { padding: 7px 22px; font-size: 15px; }
 .quiz-home { display: grid; gap: 12px; }
 .quiz-pick { display: grid; gap: 4px; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 16px 18px; cursor: pointer; color: var(--text); font: inherit; }

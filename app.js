@@ -246,14 +246,8 @@
     view.innerHTML = `
       <div class="flow-top">
         <div class="seg big" role="tablist">
-          ${[['ref', 'Reference'], ['notes', 'Notes'], ['study', 'Study'], ['run', 'Run it']].map(([k, l]) => `<button data-mode="${k}" class="${flowMode === k ? 'on' : ''}">${l}</button>`).join('')}
+          ${[['ref', 'Reference'], ['notes', 'Notes'], ['study', 'Study'], ['run', 'Scenarios']].map(([k, l]) => `<button data-mode="${k}" class="${flowMode === k ? 'on' : ''}">${l}</button>`).join('')}
         </div>
-        <p class="mode-hint${flowMode === 'ref' || (flowMode === 'study' && studyMode === 'quiz') ? ' empty-hint' : ''}" data-fit="12">${{
-          ref: '',
-          notes: 'Tap a note to open or close it.',
-          study: studyMode === 'quiz' ? '' : 'Test your knowledge, then tap to reveal.',
-          run: 'Practice with built-in scenarios or free run.',
-        }[flowMode]}</p>
       </div>
       <div id="flowBody"></div>`;
     fitTitles($('.flow-top'));
@@ -266,7 +260,7 @@
   // Study = Cover-up (tap to reveal the cards) or Quiz.
   function renderStudy(host) {
     host.innerHTML = `
-      <div class="study-switch"><div class="seg">${[['cover', 'Cover-up'], ['quiz', 'Quiz']].map(([k, l]) => `<button data-study="${k}" class="${studyMode === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      <div class="subtabs" role="tablist">${[['cover', 'Cover-up'], ['quiz', 'Quiz']].map(([k, l]) => `<button role="tab" aria-selected="${studyMode === k}" data-study="${k}" class="${studyMode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div id="studyBody"></div>`;
     $$('[data-study]', host).forEach(b => b.onclick = () => { studyMode = b.dataset.study; local.set('studyMode', studyMode); renderFlow(); });
     studyMode === 'quiz' ? renderQuiz($('#studyBody')) : renderCards($('#studyBody'));
@@ -437,7 +431,7 @@
       ${edits.layout || Object.keys(edits.cards).length || Object.keys(edits.groups).length
         ? '<div class="reset-all"><button class="btn ghost danger-text" data-resetall>Reset all steps to original</button><small>Undoes every wording change, added step and removed step. Your notes and doses stay.</small></div>' : ''}
       <section class="edit-group ph-meds">
-        <div class="eg-head"><span class="bignum">℞</span><h3 class="eg-title">Doses <small>(used in Med math + Run it)</small></h3></div>
+        <div class="eg-head"><span class="bignum">℞</span><h3 class="eg-title">Doses <small>(used in Med math + Scenarios)</small></h3></div>
         ${NRP.meds.map(m => `<div class="edit-card med-edit">
           <div class="ec-head"><b>${esc(m.name)}</b>${isEdited('meds', m.id) ? `<button class="link" data-reset="meds:${m.id}">Reset to original</button>` : ''}</div>
           <div class="med-row">
@@ -845,9 +839,16 @@
   const pickN = (arr, n) => [...arr].sort(() => Math.random() - 0.5).slice(0, n);
   const B = () => NRP.builder;
 
+  // What each kind of scenario is, shown under the Guided / Recall / Free run buttons.
+  const RUN_WHAT = {
+    scenario: 'A random case. Tap buttons for what you’d do and the baby responds.',
+    recall: 'The same kind of case, but no buttons. Type what you’d do from memory.',
+    free: 'No case. Walk through the algorithm yourself with timers and a log.',
+  };
   function renderRunArea(host) {
     host.innerHTML = `
-      <div class="seg run-modes">${[['scenario', 'Guided'], ['recall', 'Recall'], ['free', 'Free run']].map(([k, l]) => `<button data-runmode="${k}" class="${runMode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="subtabs run-modes" role="tablist">${[['scenario', 'Guided'], ['recall', 'Recall'], ['free', 'Free run']].map(([k, l]) => `<button role="tab" aria-selected="${runMode === k}" data-runmode="${k}" class="${runMode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <p class="run-what">${RUN_WHAT[runMode] || ''}</p>
       <div id="runBody"></div>`;
     $$('[data-runmode]', host).forEach(b => b.onclick = () => { runMode = b.dataset.runmode; local.set('runMode', runMode); scen = local.get(scenKey(), null); renderRunArea(host); });
     runMode === 'free' ? renderRun($('#runBody')) : renderScen($('#runBody'));
@@ -982,7 +983,7 @@
     host.innerHTML = `
       <div class="scen-pick">
         <span>Severity</span>
-        <div class="seg sev">${[['random', 'Random'], ...B().severities.map(x => [x.id, x.name])].map(([k, n]) => `<button class="${scenLevel === k ? 'on' : ''}" data-level="${k}">${n}</button>`).join('')}</div>
+        <div class="chips sev">${[['random', 'Random'], ...B().severities.map(x => [x.id, x.name])].map(([k, n]) => `<button class="chip${scenLevel === k ? ' on' : ''}" data-level="${k}">${n}</button>`).join('')}</div>
       </div>
       <section class="run-step ph-prep">
         <h2><span class="pill">${sev ? `${esc(sev.name)} case` : 'Random case'}</span></h2>
@@ -1388,7 +1389,7 @@
     const hr = s.monitor != null ? Math.round(b.hr) : s.hrChecks.length ? s.hrChecks[s.hrChecks.length - 1][1] : '?';
     host.innerHTML = `
       ${code ? '' : `<div class="scen-pick"><span>Severity</span>
-        <div class="seg sev">${[['random', 'Random'], ...B().severities.map(x => [x.id, x.name])].map(([k, n]) => `<button class="${scenLevel === k ? 'on' : ''}" data-level="${k}">${n}</button>`).join('')}</div></div>`}
+        <div class="chips sev">${[['random', 'Random'], ...B().severities.map(x => [x.id, x.name])].map(([k, n]) => `<button class="chip${scenLevel === k ? ' on' : ''}" data-level="${k}">${n}</button>`).join('')}</div></div>`}
       <div class="run recall">
         ${toolBar('data-rc', `<button class="tool" data-rc="hint">${icons.tips}<span>Hint</span></button>`)}
         ${code ? `<section class="monitor compact">
