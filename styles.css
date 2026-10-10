@@ -390,16 +390,18 @@ li.big {
 .ask:not(.open) .ask-q::after { content: 'Ask'; margin-left: auto; font-size: 13px; color: var(--lav-ink); }
 .ask-a { padding: 0 12px 12px 50px; font-size: 16px; display: flex; flex-direction: column; gap: 6px; }
 .case-strip { font-weight: 800; color: var(--muted); font-size: 14px; }
-.monitor { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: #1b2530; color: #e8f1f5; border-radius: var(--radius); padding: 12px; }
+.monitor { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; background: #1b2530; color: #e8f1f5; border-radius: var(--radius); padding: 12px; }
 .mon { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mon small { font-size: 11px; font-weight: 800; color: #9fb3bf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mon b { font-size: 28px; font-variant-numeric: tabular-nums; }
-.mon:first-child b { color: #7ee0a1; } .mon:nth-child(2) b { color: #8fd3ff; }
-.fio2-set { display: flex; align-items: center; gap: 4px; }
-.fio2-set b { font-size: 20px; min-width: 46px; text-align: center; }
-.fio2-set button { width: 26px; height: 26px; border-radius: 50%; border: 0; background: #34465a; color: #fff; font-weight: 800; cursor: pointer; }
+.mon.hr b { color: #7ee0a1; } .mon.sp b { color: #8fd3ff; }
 .monitor .look-text { grid-column: 1 / -1; margin: 4px 0 0; font-size: 15px; font-weight: 600; color: #e8f1f5; background: #26323f; border-radius: 10px; padding: 8px 10px; }
 .monitor .look-text b { color: #9fb3bf; margin-right: 6px; }
+.mon-extra { display: block; font-size: 12px; font-weight: 700; color: #9fb3bf; margin-top: 2px; }
+.mon-extra:empty { display: none; }
+.fio2-ctl { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--line); border-radius: 999px; padding: 0 4px; height: 36px; font-size: 14px; }
+.fio2-ctl button { width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--soft); color: var(--text); font-weight: 800; font-size: 16px; cursor: pointer; }
+.fio2-ctl b { white-space: nowrap; }
 .actions-panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
 .actions-panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 0 6px; }
 .actions-panel h3:first-child { margin-top: 0; }
@@ -421,8 +423,14 @@ li.big {
 .grade-list .ok .gi { background: var(--title); color: var(--title-on); }
 .grade-list .no .gi { background: var(--peach); color: var(--peach-ink); }
 .grade-list small { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+/* Scenario toolbar: every button the same size + shape */
+.tool-row { display: flex; align-items: center; gap: 8px; }
+.tool-gap { flex: 1; }
+.tool { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 12px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); color: var(--text); font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.tool:hover { background: var(--soft); }
+.tool svg { width: 17px; height: 17px; flex: none; }
 /* Recall: type what you do */
-.monitor.compact { grid-template-columns: repeat(4, 1fr); padding: 8px 12px; }
+.monitor.compact { grid-template-columns: repeat(5, 1fr); padding: 8px 12px; }
 .monitor.compact .mon b { font-size: 20px; }
 .chat { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; padding: 4px 2px; }
 .msg { max-width: 85%; padding: 8px 12px; border-radius: 16px; font-size: 16px; line-height: 1.4; background: var(--card); border: 1px solid var(--line); align-self: flex-start; }
@@ -435,8 +443,10 @@ li.big {
 .ask-form input { flex: 1; min-width: 0; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 14px; font-size: 16px; background: var(--card); color: var(--text); }
 .recall .end { align-self: center; }
 @media (max-width: 560px) {
-  .monitor { grid-template-columns: repeat(2, 1fr); }
-  .monitor.compact { grid-template-columns: repeat(4, 1fr); }
+  .monitor { grid-template-columns: repeat(3, 1fr); }
+  .tool { padding: 0 10px; }
+  .monitor.compact { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .monitor.compact .mon b { font-size: 17px; }
   .run-clock { gap: 8px; }
   .run-clock > div { padding: 6px 12px; }
 }
@@ -507,6 +517,33 @@ li.big {
 .result.ok { background: color-mix(in srgb, #4caf7a 18%, var(--card)); }
 .result.no { background: var(--peach); }
 .result ol { margin: 6px 0 0; padding-left: 22px; }
+
+/* ---------- Quiz (Study → Quiz) ---------- */
+.study-switch { display: flex; justify-content: center; margin: 2px 0 14px; }
+.study-switch .seg button { padding: 7px 22px; font-size: 15px; }
+.quiz-home { display: grid; gap: 12px; }
+.quiz-pick { display: grid; gap: 4px; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 16px 18px; cursor: pointer; color: var(--text); font: inherit; }
+.quiz-pick b { font-size: 19px; color: var(--title); display: flex; align-items: center; gap: 8px; }
+.quiz-pick span { color: var(--muted); font-size: 14px; }
+.quiz-pick b .pill-count { color: var(--text); font-size: 13px; }
+.quiz-pick:disabled { opacity: .55; cursor: default; box-shadow: none; }
+.quiz-pick:not(:disabled):hover { background: var(--soft); }
+.quiz-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.quiz-top .qtype { font-weight: 800; color: var(--title); }
+.quiz-top .link { margin-left: auto; }
+.quiz-q .q { margin: 0 0 14px; }
+.choices.stack { display: grid; gap: 8px; }
+.choices.stack .choice { justify-content: flex-start; text-align: left; width: 100%; white-space: normal; line-height: 1.3; padding-top: 10px; padding-bottom: 10px; }
+.choices.row .choice { flex: 1 1 0; min-width: 0; }
+.quiz-q .result p { margin: 6px 0; }
+.quiz-q .result .link { margin-top: 2px; }
+.flow [data-id] { scroll-margin-top: 96px; }  /* "See the card" from the quiz lands below the header */
+.quiz-end .score { font-size: 44px; font-weight: 800; text-align: center; color: var(--title); }
+.quiz-end h3 { margin-top: 16px; }
+.missed-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.missed-list li { background: var(--soft); border-radius: 12px; padding: 8px 12px; display: grid; gap: 2px; }
+.missed-list .ans { font-size: 15px; }
 
 /* ---------- Airway ---------- */
 .pp-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

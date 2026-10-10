@@ -37,6 +37,7 @@
     pencil: svg('<path d="M4 20l1-5L16 4l4 4L9 19l-5 1z"/>'),
     clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
     soundOn: svg('<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/>'),
+    restart: svg('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'),
     soundOff: svg('<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M16 9l6 6M22 9l-6 6"/>'),
   };
   // Icons that can sit before a big step's title (picked per step in Edit cards).
@@ -160,6 +161,7 @@
   let user = null, notes = [], unwatch = () => {};
   const open = new Set(local.get('open2', ['g-golden']));
   let flowMode = local.get('flowMode', 'ref');
+  let studyMode = local.get('studyMode', 'cover');
   const revealed = new Set();
 
 
@@ -246,10 +248,10 @@
         <div class="seg big" role="tablist">
           ${[['ref', 'Reference'], ['notes', 'Notes'], ['study', 'Study'], ['run', 'Run it']].map(([k, l]) => `<button data-mode="${k}" class="${flowMode === k ? 'on' : ''}">${l}</button>`).join('')}
         </div>
-        <p class="mode-hint${flowMode === 'ref' ? ' empty-hint' : ''}" data-fit="12">${{
+        <p class="mode-hint${flowMode === 'ref' || (flowMode === 'study' && studyMode === 'quiz') ? ' empty-hint' : ''}" data-fit="12">${{
           ref: '',
           notes: 'Tap a note to open or close it.',
-          study: 'Test your knowledge, then tap to reveal.',
+          study: studyMode === 'quiz' ? '' : 'Test your knowledge, then tap to reveal.',
           run: 'Practice with built-in scenarios or free run.',
         }[flowMode]}</p>
       </div>
@@ -258,13 +260,23 @@
     $$('[data-mode]').forEach(b => b.onclick = () => { editMode = false; flowMode = b.dataset.mode; local.set('flowMode', flowMode); renderFlow(); });
     if (flowMode === 'run') return renderRunArea($('#flowBody'));
     if (flowMode === 'notes') return renderNotesMode($('#flowBody'));
+    if (flowMode === 'study') return renderStudy($('#flowBody'));
     renderCards($('#flowBody'));
+  }
+  // Study = Cover-up (tap to reveal the cards) or Quiz.
+  function renderStudy(host) {
+    host.innerHTML = `
+      <div class="study-switch"><div class="seg">${[['cover', 'Cover-up'], ['quiz', 'Quiz']].map(([k, l]) => `<button data-study="${k}" class="${studyMode === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      <div id="studyBody"></div>`;
+    $$('[data-study]', host).forEach(b => b.onclick = () => { studyMode = b.dataset.study; local.set('studyMode', studyMode); renderFlow(); });
+    studyMode === 'quiz' ? renderQuiz($('#studyBody')) : renderCards($('#studyBody'));
   }
   // Notes changed on another device (or just saved): redraw without jumping to the top.
   function refreshFlow() {
     const body = $('#flowBody');
     if (!body || editor || flowMode === 'run') return;
     if (editMode) return;  // don't wipe what you're typing
+    if (flowMode === 'study') { if (studyMode !== 'quiz') renderCards($('#studyBody')); return; }
     flowMode === 'notes' ? renderNotesMode(body) : renderCards(body);
   }
 
@@ -679,7 +691,7 @@
     }),
     cpr: () => ({
       title: 'Compressions', phase: 'cpr', countdown: { from: run.stepAt, secs: 60, label: '60 sec of CPR', done: 'Check HR' },
-      body: `${beat()}${checklist(['Intubate with **FiO₂ 100%**', 'Consider **cardiac monitoring**', 'Line: UVC or IO'])}`,
+      body: `${beat()}${checklist(['Intubate or laryngeal mask with **FiO₂ 100%**', 'Consider **cardiac monitoring**', 'Line: UVC or IO'])}`,
       actions: [['HR ≥ 60', () => go('ppv30', 'HR ≥ 60 → stop compressions, continue PPV'), ''], ['HR < 60', () => go('epi', 'HR still < 60 → epi'), 'danger']],
     }),
     epi: () => ({
@@ -971,7 +983,6 @@
       <div class="scen-pick">
         <span>Severity</span>
         <div class="seg sev">${[['random', 'Random'], ...B().severities.map(x => [x.id, x.name])].map(([k, n]) => `<button class="${scenLevel === k ? 'on' : ''}" data-level="${k}">${n}</button>`).join('')}</div>
-        <small>${sev ? esc(sev.hint) : 'Any severity: you find out when the baby is born.'}</small>
       </div>
       <section class="run-step ph-prep">
         <h2><span class="pill">${sev ? `${esc(sev.name)} case` : 'Random case'}</span></h2>
@@ -1013,33 +1024,38 @@
   }
   const FIO2_STEPS = [21, 30, 40, 50, 60, 80, 100];
 
+  // One even toolbar: case buttons on the left, sound + new case on the right.
+  const toolBar = (attr, left) => `<div class="tool-row">${left}<span class="tool-gap"></span>
+    <button class="tool" ${attr}="sound" aria-label="${runSound ? 'Sound on' : 'Sound off'}">${runSound ? icons.soundOn : icons.soundOff}<span>${runSound ? 'Sound' : 'Muted'}</span></button>
+    <button class="tool" ${attr}="new">${icons.restart}<span>New</span></button></div>`;
+
   function renderCode(host) {
     const s = scen.s, b = scen.baby, w = scen.weighed ? `${fmt(scen.weight)} kg` : '? kg';
     const btn = (act, label, cls = '', extra = '') => `<button class="btn ${cls || 'ghost'} small" data-sa="${act}" ${extra}>${label}</button>`;
     const on = x => x ? 'primary on' : '';
+    // Small print under the monitor: when HR was checked, and the SpO2 target.
+    const monExtra = () => [s.monitor != null ? 'HR on the monitor' : s.hrChecks.length ? `HR checked at ${mmss(s.hrChecks[s.hrChecks.length - 1][0])}` : '',
+      s.pox != null ? (scen.sim >= 120 ? `SpO₂ target ${spo2Band(scen.sim).join('–')}%` : 'No SpO₂ target yet') : ''].filter(Boolean).join(' · ');
     const hrShown = s.monitor ? Math.round(b.hr) : s.hrChecks.length ? `${s.hrChecks[s.hrChecks.length - 1][1]}` : '?';
     host.innerHTML = `
       <div class="run">
-        <div class="run-clock">
-          <div><small>Since birth</small><b data-sclock>${mmss(scen.sim)}</b></div>
-          <button class="btn ghost small" data-sa="skip15">+15 s</button><button class="btn ghost small" data-sa="skip30">+30 s</button>
-          <button class="icon-btn" data-sa="sound" aria-label="${runSound ? 'Sound on' : 'Sound off'}" title="${runSound ? 'Sound on' : 'Sound off'}">${runSound ? icons.soundOn : icons.soundOff}</button>
-          <button class="btn ghost small" data-sa="new">New case</button>
-        </div>
+        ${toolBar('data-sa', '<button class="tool" data-sa="skip15">+15 s</button><button class="tool" data-sa="skip30">+30 s</button>')}
         <div class="case-strip">${scen.gest} wks · ${esc(scen.fluid.toLowerCase())} fluid · ${w}${s.airway ? ` · ${s.airway === 'ett' ? 'intubated' : 'laryngeal mask'}` : ''}${s.line ? ` · ${s.line.toUpperCase()} in` : ''}</div>
-        <section class="monitor">
-          <div class="mon"><small>HR${s.monitor ? ' · monitor' : s.hrChecks.length ? ` · at ${mmss(s.hrChecks[s.hrChecks.length - 1][0])}` : ''}</small><b data-mhr>${hrShown}</b></div>
-          <div class="mon"><small>SpO₂ <span data-mtarget>${s.pox != null ? scen.sim >= 120 ? `· target ${spo2Band(scen.sim).join('–')}%` : '· no target yet' : ''}</span></small><b data-mspo2>${s.pox != null && scen.sim - s.pox >= 10 ? `${Math.round(b.spo2)}%` : s.pox != null ? '…' : '–'}</b></div>
-          <div class="mon"><small>FiO₂</small><div class="fio2-set"><button data-sa="fio2-" aria-label="Lower FiO2">−</button><b>${s.fio2}%</b><button data-sa="fio2+" aria-label="Raise FiO2">+</button></div></div>
-          <div class="mon"><small>PIP / PEEP</small><b>${s.pip}/5</b></div>
-          <p class="look-text" data-look>${s.lookAt != null ? `<b>${mmss(s.lookAt)}</b> ${esc(scen.lookCache)}` : 'Tap “Look at baby” for the rapid evaluation.'}</p>
+        <section class="monitor compact">
+          <div class="mon"><small>Time</small><b data-sclock>${mmss(scen.sim)}</b></div>
+          <div class="mon hr"><small>HR</small><b data-mhr>${hrShown}</b></div>
+          <div class="mon sp"><small>SpO₂</small><b data-mspo2>${s.pox != null && scen.sim - s.pox >= 10 ? `${Math.round(b.spo2)}%` : s.pox != null ? '…' : '–'}</b></div>
+          <div class="mon"><small>FiO₂</small><b>${s.fio2}%</b></div>
+          <div class="mon"><small>PIP/PEEP</small><b>${s.pip}/5</b></div>
+          <p class="look-text" data-look>${s.lookAt != null ? `<b>${mmss(s.lookAt)}</b> ${esc(scen.lookCache)}` : 'Tap “Look at baby” for the rapid evaluation.'}<small class="mon-extra" data-minfo>${monExtra()}</small></p>
         </section>
         <section class="actions-panel">
           <h3>Assess</h3>
           <div class="act-row">${btn('look', 'Look at baby')}${btn('hr', 'Check HR')}${btn('pox', s.pox != null ? 'Pulse ox on' : 'Pulse ox', s.pox != null ? 'done' : '')}${btn('monitor', s.monitor != null ? 'Monitor on' : 'Cardiac monitor', s.monitor != null ? 'done' : '')}${btn('weigh', scen.weighed ? `Weighed ${fmt(scen.weight)} kg` : 'Weigh on warmer', scen.weighed ? 'done' : '')}</div>
           <h3>Airway + breathing</h3>
           <div class="act-row">${btn('routine', 'Routine care · skin to skin')}${btn('initial', s.initial != null ? 'Initial steps done' : 'Initial steps', s.initial != null ? 'done' : '')}${btn('wrap', s.wrap != null ? 'Wrapped' : 'Plastic bag/wrap', s.wrap != null ? 'done' : '')}
-            ${btn('ffo2', s.ffo2 ? 'Free-flow O₂ on' : 'Free-flow O₂', on(s.ffo2))}${btn('cpap', s.cpap ? 'CPAP on' : 'CPAP', on(s.cpap))}${btn('ppv', s.ppv ? 'PPV on · stop' : 'Start PPV', on(s.ppv))}</div>
+            ${btn('ffo2', s.ffo2 ? 'Free-flow O₂ on' : 'Free-flow O₂', on(s.ffo2))}${btn('cpap', s.cpap ? 'CPAP on' : 'CPAP', on(s.cpap))}${btn('ppv', s.ppv ? 'PPV on · stop' : 'Start PPV', on(s.ppv))}
+            <span class="fio2-ctl"><button data-sa="fio2-" aria-label="Lower FiO2">−</button><b>FiO₂ ${s.fio2}%</b><button data-sa="fio2+" aria-label="Raise FiO2">+</button></span></div>
           ${s.ppv || s.letters.length || s.airway ? `<h3>MR. SOPA</h3>
           <div class="act-row sopa">${[['M', 'Mask'], ['R', 'Reposition'], ['S', 'Suction'], ['O', 'Open mouth'], ['P', 'Pressure ↑ 5']].map(([k, n]) => btn('L' + k, `<b>${k}</b> ${n}`, s.letters.includes(k) ? 'done' : '')).join('')}
             ${btn('ett', s.airway === 'ett' ? '<b>A</b> Intubated' : '<b>A</b> Intubate', s.airway === 'ett' ? 'done' : '')}${btn('lma', s.airway === 'lma' ? '<b>A</b> Laryngeal mask in' : '<b>A</b> Laryngeal mask', s.airway === 'lma' ? 'done' : '')}</div>` : ''}
@@ -1059,7 +1075,7 @@
       $('[data-sclock]', host).textContent = mmss(scen.sim);
       if (s.monitor != null) $('[data-mhr]', host).textContent = Math.round(scen.baby.hr);
       const sp = $('[data-mspo2]', host); if (sp && s.pox != null) sp.textContent = scen.sim - s.pox >= 10 ? `${Math.round(scen.baby.spo2)}%` : '…';
-      const tg = $('[data-mtarget]', host); if (tg && s.pox != null) tg.textContent = scen.sim >= 120 ? `· target ${spo2Band(scen.sim).join('–')}%` : '· no target yet';
+      const mi = $('[data-minfo]', host); if (mi) mi.textContent = monExtra();
       // Chimes: check HR 15 s into PPV and 60 s into compressions; epi at 3 + 5 min.
       if (s.ppvFirst != null) cue(`s${scen.t0}ppv`, s.ppvFirst + 15 - scen.sim, 'check');
       if (s.compAt != null && s.comp) cue(`s${scen.t0}c${s.compAt}`, s.compAt + 60 - scen.sim, 'check');
@@ -1255,11 +1271,13 @@
 
   function recallPre(txt) {
     const p = scen.plan;
-    if (scen.pending === 'cord' || any(txt, ['delay', 'delayed', 'defer', 'deferred', 'milk', 'milking', 'immediate', 'clamp now'])) {
-      const plan = any(txt, ['milk', 'milking']) ? CORD[1] : any(txt, ['immediate', 'clamp now', 'cut now', 'early']) ? CORD[2] : any(txt, ['delay', 'delayed', 'defer', 'deferred', 'wait']) ? CORD[0] : null;
-      if (!plan) return say('app', 'What’s the cord plan? e.g. “delayed clamping”, “cord milking” or “immediate clamping”.');
-      scen.pending = null; scen.cord = plan; if (!scen.asked.includes('cord')) scen.asked.push('cord');
-      return say('app', `Cord plan: ${plan}.`);
+    const plan = any(txt, ['milk', 'milking']) ? CORD[1] : any(txt, ['immediate', 'clamp now', 'cut now', 'early']) ? CORD[2]
+      : any(txt, ['delay', 'delayed', 'defer', 'deferred']) ? CORD[0] : null;
+    if (plan) { scen.pending = null; scen.cord = plan; if (!scen.asked.includes('cord')) scen.asked.push('cord'); return say('app', `Cord plan: ${plan}.`); }
+    if (scen.pending === 'cord') {
+      const other = PRE.some(([k, words]) => k !== 'cord' && any(txt, words)) || any(txt, ['born', 'birth', 'delivered']);
+      if (!other) return say('app', 'I didn’t catch the plan.');
+      scen.pending = null;  // moved on to another question
     }
     if (any(txt, ['born', 'birth', 'delivered', 'baby is out', 'baby out', 'baby is here'])) {
       scen.stage = 'code'; scen.sim = 0; scen.t0 = null;
@@ -1268,13 +1286,13 @@
     }
     if (p.preterm && scen.asked.includes('gest') && any(txt, ['plastic', 'wrap', 'plastic bag', 'thermal mattress'])) { scen.brief = [0]; return say('app', 'Plastic bag/wrap + thermal mattress ready.'); }
     const hit = PRE.find(([, words]) => any(txt, words));
-    if (!hit) return say('app', 'Before the birth: ask about gestation, amniotic fluid, risk factors and the cord plan. Then type “baby is born”.');
+    if (!hit) return say('app', 'I didn’t catch that. Try rephrasing, or tap Hint.');
     const k = hit[0];
     if (!scen.asked.includes(k) && k !== 'cord') scen.asked.push(k);
     if (k === 'gest') return say('app', `${scen.gest} weeks.`);
     if (k === 'fluid') return say('app', scen.fluid === 'Clear' ? 'Clear.' : 'Green: meconium-stained.');
     if (k === 'risks') return say('app', scen.risks.join(' · ') + '.');
-    scen.pending = 'cord'; say('app', 'What’s the cord plan? e.g. “delayed clamping”, “cord milking” or “immediate clamping”.');
+    scen.pending = 'cord'; say('app', 'What’s the plan?');
   }
 
   function recallCode(txt) {
@@ -1365,29 +1383,24 @@
   function renderRecall(host) {
     clearInterval(scenTick);
     const s = scen.s, b = scen.baby, code = scen.stage === 'code';
-    if (!scen.chat.length) say('app', `${scen.birthMode}. Ask your pre-birth questions (gestation, fluid, risk factors, cord plan), then type “baby is born”.`);
+    if (!scen.chat.length) say('app', `${scen.birthMode}. You’re called to the delivery.`);
     const sev = B().severities.find(x => x.id === scenLevel);
     const hr = s.monitor != null ? Math.round(b.hr) : s.hrChecks.length ? s.hrChecks[s.hrChecks.length - 1][1] : '?';
     host.innerHTML = `
       ${code ? '' : `<div class="scen-pick"><span>Severity</span>
-        <div class="seg sev">${[['random', 'Random'], ...B().severities.map(x => [x.id, x.name])].map(([k, n]) => `<button class="${scenLevel === k ? 'on' : ''}" data-level="${k}">${n}</button>`).join('')}</div>
-        <small>${sev ? esc(sev.hint) : 'Any severity: you find out when the baby is born.'}</small></div>`}
+        <div class="seg sev">${[['random', 'Random'], ...B().severities.map(x => [x.id, x.name])].map(([k, n]) => `<button class="${scenLevel === k ? 'on' : ''}" data-level="${k}">${n}</button>`).join('')}</div></div>`}
       <div class="run recall">
-        <div class="run-clock">
-          <div><small>${code ? 'Time (simulated)' : 'Before the birth'}</small><b>${code ? mmss(scen.sim) : '–:––'}</b></div>
-          <button class="btn ghost small" data-rc="hint">Hint</button>
-          <button class="icon-btn" data-rc="sound" aria-label="${runSound ? 'Sound on' : 'Sound off'}" title="${runSound ? 'Sound on' : 'Sound off'}">${runSound ? icons.soundOn : icons.soundOff}</button>
-          <button class="btn ghost small" data-rc="new">New case</button>
-        </div>
+        ${toolBar('data-rc', `<button class="tool" data-rc="hint">${icons.tips}<span>Hint</span></button>`)}
         ${code ? `<section class="monitor compact">
-          <div class="mon"><small>HR</small><b>${hr}</b></div>
-          <div class="mon"><small>SpO₂</small><b>${s.pox != null && scen.sim - s.pox >= 10 ? Math.round(b.spo2) + '%' : '–'}</b></div>
+          <div class="mon"><small>Time</small><b>${mmss(scen.sim)}</b></div>
+          <div class="mon hr"><small>HR</small><b>${hr}</b></div>
+          <div class="mon sp"><small>SpO₂</small><b>${s.pox != null && scen.sim - s.pox >= 10 ? Math.round(b.spo2) + '%' : '–'}</b></div>
           <div class="mon"><small>FiO₂</small><b>${s.fio2}%</b></div>
           <div class="mon"><small>PIP/PEEP</small><b>${s.pip}/5</b></div>
         </section>` : ''}
         <div class="chat" data-chat>${scen.chat.map(([who, text, t]) => `<div class="msg ${who}">${who === 'you' ? '' : `<small>${scen.stage === 'prebirth' || t == null ? '' : mmss(t)}</small>`}${esc(text)}</div>`).join('')}</div>
         <form class="ask-form" data-ask-form>
-          <input type="text" autocomplete="off" autocapitalize="off" autocorrect="on" enterkeyhint="send" placeholder="${code ? 'What do you do?' : 'Ask a pre-birth question…'}" aria-label="Type what you do" data-ask-in>
+          <input type="text" autocomplete="off" autocapitalize="off" autocorrect="on" enterkeyhint="send" placeholder="${code ? 'What do you do?' : 'Type here…'}" aria-label="Type what you do" data-ask-in>
           <button class="btn primary">Send</button>
         </form>
         ${code ? '<button class="btn ghost small end" data-rc="end">Post-resuscitation care · debrief</button>' : ''}
@@ -1611,8 +1624,11 @@
   const pick = a => a[Math.floor(Math.random() * a.length)];
   function makeQ() {
     const kind = pick(['dose', 'dose', 'dose', 'dose', 'gest', 'concept']);
-    const med = pick(NRP.meds);
     if (kind === 'concept') return pick(CONCEPTS)();
+    return doseQ(pick(NRP.meds), kind === 'gest');
+  }
+  function doseQ(med, byGest) {
+    const kind = byGest ? 'gest' : 'dose';
     let w = round2(0.5 + Math.round(Math.random() * 40) / 10);
     let lead = `A **${fmt(w)} kg** baby`;
     if (kind === 'gest') { const r = pick(NRP.weights); w = r[1]; lead = `A **${r[0]}** baby (estimate the weight)`; }
@@ -1692,6 +1708,191 @@
     host.onclick = e => {
       const c = e.target.closest('[data-choice]'); if (c) return finish(c.dataset.choice, c.dataset.choice === q.answer);
       if (e.target.closest('[data-next]')) { drill.q = makeQ(); renderDrill(); }
+    };
+  }
+
+  /* ================= Quiz (Study → Quiz) ================= */
+  // Questions are in content.js (NRP.quiz); the dose ones + SpO₂/ETT are made here from the doses and tables,
+  // so your dose edits carry over. Anything missed comes back until it's right twice in a row (synced).
+  const quiz = { missed: {}, last: null, ...local.get('quiz', {}) };  // missed: {id: right in a row}
+  const seen = local.get('quizSeen', {});  // id → when last asked (this device), so rounds vary
+  let round = null, quizTimer;
+  function saveQuiz() {
+    local.set('quiz', quiz);
+    clearTimeout(quizTimer);
+    quizTimer = setTimeout(() => Store.savePrefs({ quiz: copy(quiz) }).catch(() => {}), 800);
+  }
+  const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const QTYPE = { decide: 'What next?', value: 'Values', tf: 'True or false', wrong: 'Which is wrong?', dose: 'Dose math' };
+  const MIX = [['decide', 4], ['value', 2], ['tf', 1], ['wrong', 1], ['dose', 2]];
+  const medById = id => NRP.meds.find(m => m.id === id);
+  const others = (a, list, n = 3) => shuffle([...new Set(list.map(String))].filter(x => x !== String(a))).slice(0, n);
+
+  function doseQuiz(id) {
+    const m = medById(id); if (!m) return null;
+    const d = doseQ(m, Math.random() < 0.3);
+    return { type: 'dose', card: id === 'ns' ? 'volume' : 'epi', q: d.text, parts: d.parts, work: d.work };
+  }
+  function mlQuiz(id, q) {
+    const m = medById(id); if (!m) return null;
+    return { type: 'value', card: id === 'ns' ? 'volume' : 'epi', q, a: `${m.mlPerKg} mL/kg`,
+      no: others(m.mlPerKg, [...NRP.meds.map(x => x.mlPerKg), 0.02, 0.1, 0.5, 1, 2, 5, 20]).map(v => v + ' mL/kg'),
+      why: `${esc(m.name)}: ==${m.mlPerKg} mL/kg==. ${esc(m.note)}` };
+  }
+  function spo2Quiz() {
+    const [t, lo, hi] = pick(NRP.spo2), k = pick(['below', 'in', 'above']);
+    const v = k === 'in' ? lo + Math.floor(Math.random() * (hi - lo + 1)) : k === 'below' ? lo - 2 - Math.floor(Math.random() * 6) : Math.min(100, hi + 2 + Math.floor(Math.random() * 6));
+    return { type: 'value', tab: 'tips', q: `Baby is **${t} old**. ==SpO₂ ${v}%==. Target?`, a: { below: 'Below target', in: 'In target', above: 'Above target' }[k],
+      choices: ['Below target', 'In target', 'Above target'], why: `Target at ${t}: ==${lo}–${hi}%==.` };
+  }
+  const ettSize = s => s.replace('*', '');
+  function ettSizeQuiz() {
+    const r = pick(NRP.ett), sizes = [...new Set(NRP.ett.map(x => ettSize(x[3])))];
+    return { type: 'value', tab: 'tips', q: `Baby weighs ==${r[1]}==. **ETT size** (mm)?`, a: ettSize(r[3]), choices: sizes,
+      why: `${r[1]} (${r[0]}): size ==${ettSize(r[3])}==${r[3].includes('*') ? ' (a 2.0 may be considered)' : ''}.` };
+  }
+  function ettDepthQuiz() {
+    const i = Math.floor(Math.random() * NRP.ett.length), r = NRP.ett[i];
+    const near = NRP.ett.map((x, j) => [x[2], Math.abs(j - i)]).filter(([d]) => d !== r[2]).sort((a, b) => a[1] - b[1] + Math.random() - .5).map(x => x[0]);
+    return { type: 'value', tab: 'tips', q: `A ==${r[0]}== baby. **ETT depth** (tip-to-gum)?`, a: r[2], no: [...new Set(near)].slice(0, 3),
+      why: `${r[0]} (${r[1]}): ==${r[2]}== tip-to-gum.` };
+  }
+  const MADE = {
+    'dose-epiIV': ['dose', () => doseQuiz('epiIV')], 'dose-epiET': ['dose', () => doseQuiz('epiET')], 'dose-ns': ['dose', () => doseQuiz('ns')],
+    'm-epiIV': ['value', () => mlQuiz('epiIV', '**IV/IO epi** dose (1:10,000)?')],
+    'm-epiET': ['value', () => mlQuiz('epiET', '**ET epi** dose (1:10,000)?')],
+    'm-ns': ['value', () => mlQuiz('ns', '**Volume** dose (NS or O-neg blood)?')],
+    'm-conc': ['value', () => { const m = medById('epiIV'); return m && { type: 'value', card: 'epi', q: '**1:10,000** epi has how many mg in each mL?',
+      a: `${m.mgPerMl} mg`, no: others(m.mgPerMl, [0.01, 1, 10, 0.2]).map(v => v + ' mg'), why: '1:10,000 = ==0.1 mg== in every mL. (1:1,000 is 1 mg/mL, 10× stronger.)' }; }],
+    'm-spo2': ['value', spo2Quiz], 'm-ett-size': ['value', ettSizeQuiz], 'm-ett-depth': ['value', ettDepthQuiz],
+  };
+  function quizQ(id) {
+    const q = MADE[id] ? MADE[id][1]() : copy((NRP.quiz || []).find(x => x.id === id) || null);
+    if (!q) return null;
+    q.id = id;
+    if (!q.parts && !q.choices) q.choices = q.type === 'tf' ? ['True', 'False'] : shuffle([q.a, ...(q.no || [])]);
+    return q;
+  }
+  const quizIds = type => [...(NRP.quiz || []).filter(x => x.type === type).map(x => x.id), ...Object.keys(MADE).filter(k => MADE[k][0] === type)];
+  // Least recently asked first (never asked = first), ties in random order.
+  const freshest = (ids, n) => shuffle(ids).sort((a, b) => (seen[a] || 0) - (seen[b] || 0)).slice(0, n);
+  const validId = id => !!MADE[id] || (NRP.quiz || []).some(x => x.id === id);
+
+  function startRound(kind) {
+    Object.keys(quiz.missed).forEach(id => { if (!validId(id)) delete quiz.missed[id]; });
+    const ids = kind === 'missed' ? shuffle(Object.keys(quiz.missed)).slice(0, 10)
+      : shuffle(MIX.flatMap(([t, n]) => freshest(quizIds(t), n)));
+    round = { kind, qs: ids.map(quizQ).filter(Boolean), i: 0, score: 0 };
+  }
+  function answerQuiz(q, given, ok) {
+    Object.assign(q, { done: true, given, ok });
+    if (ok) round.score++;
+    seen[q.id] = Date.now(); local.set('quizSeen', seen);
+    if (!ok) quiz.missed[q.id] = 0;
+    else if (q.id in quiz.missed && ++quiz.missed[q.id] >= 2) delete quiz.missed[q.id];
+    saveQuiz();
+  }
+  const doseSay = q => `“The dose is ${q.parts.map(([u, a]) => `**${u === 'mg' ? fmtMg(a) : fmt(a)} ${u}**`).join(', which is ')}.”`;
+  const answerText = q => q.parts ? doseSay(q) : q.type === 'wrong' ? `Wrong one: **${q.a}**` : `**${q.a}**`;
+  function goCard(q) {
+    if (q.tab) { location.hash = '#/' + q.tab; return; }
+    const g = NRP.groups.find(x => x.cards.includes(q.card)); if (!g) return;
+    flowMode = 'ref'; local.set('flowMode', flowMode); editMode = false;
+    open.add(g.id); if (g.cards.length > 1) open.add(q.card); local.set('open2', [...open]);
+    renderFlow();
+    $(`[data-id="${g.cards.length > 1 ? q.card : g.id}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+  const cardLink = q => q.tab ? 'See it in Tips' : CARD[q.card] && NRP.groups.some(g => g.cards.includes(q.card)) ? `See “${cardTitle(q.card)}”` : '';
+
+  function renderQuiz(host) {
+    const top = host.getBoundingClientRect().top;
+    if (top < 0) window.scrollTo({ top: scrollY + top - 90 });
+    if (!round) return quizHome(host);
+    const q = round.qs[round.i];
+    if (!q) return quizEnd(host);
+    const n = round.qs.length, last = round.i === n - 1, link = cardLink(q);
+    const cls = c => !q.done ? '' : c === q.a ? ' right' : c === q.given ? ' wrong' : '';
+    host.innerHTML = `
+      <div class="quiz-top">
+        <span class="pill-count">${round.i + 1} / ${n}</span><span class="qtype">${QTYPE[q.type]}</span>
+        <button class="link" data-quit>Quit</button>
+      </div>
+      <section class="panel question quiz-q">
+        <p class="q">${md(q.q)}</p>
+        ${q.choices ? `<div class="choices ${q.type === 'tf' || q.choices.every(c => c.length < 14) ? 'row' : 'stack'}">${q.choices.map(c =>
+          `<button class="btn ghost choice${cls(c)}" data-choice="${esc(c)}" ${q.done ? 'disabled' : ''}>${esc(c)}</button>`).join('')}</div>`
+        : `<form class="answer say" data-form>
+            ${q.parts.map(([unit], j) => `<span class="say-lead">${j ? 'which is' : 'The dose is'}</span>
+              <input type="text" inputmode="decimal" autocomplete="off" placeholder="${unit}" value="${esc(q.given?.[j] ?? '')}" ${q.done ? 'disabled' : ''} data-ans
+                class="${q.done ? (q.partOk[j] ? 'right' : 'wrong') : ''}" aria-label="Dose in ${unit}"><span class="say-unit">${unit}${j < q.parts.length - 1 ? ',' : '.'}</span>`).join('')}
+            <button class="btn primary" ${q.done ? 'disabled' : ''}>Check</button></form>`}
+        ${q.done ? `<div class="result ${q.ok ? 'ok' : 'no'}">
+            <b>${q.ok ? 'Right! ✓' : 'Not quite.'}</b>
+            ${!q.ok && q.choices ? `<p>${q.type === 'wrong' ? 'The wrong one' : 'Answer'}: <b>${esc(q.a)}</b></p>` : ''}
+            ${q.parts ? `<p>${md(doseSay(q))}</p><ol>${q.work.map(w => `<li>${md(w)}</li>`).join('')}</ol>` : `<p>${md(q.why || '')}</p>`}
+            ${q.id in quiz.missed ? `<p class="small">${quiz.missed[q.id] ? 'Right once. One more time and it’s off your missed list.' : 'Added to My missed ones.'}</p>`
+              : round.kind === 'missed' && q.ok ? '<p class="small">Off your missed list. ✓</p>' : ''}
+            ${link ? `<button class="link" data-card>${esc(link)} →</button>` : ''}
+          </div>
+          <button class="btn primary" data-qnext>${last ? 'See my score' : 'Next'}</button>` : ''}
+      </section>`;
+    const f = $('[data-form]', host);
+    if (f) {
+      if (!q.done) setTimeout(() => $('[data-ans]', host)?.focus({ preventScroll: true }), 0);
+      f.onsubmit = e => {
+        e.preventDefault();
+        const boxes = $$('[data-ans]', host), raw = boxes.map(b => b.value.trim());
+        const vals = raw.map(r => parseFloat(r.replace(/[^\d.]/g, '')));
+        const empty = vals.findIndex(isNaN);
+        if (empty >= 0) return boxes[empty].focus();
+        q.partOk = q.parts.map(([u, a], j) => Math.abs(vals[j] - a) <= Math.max(u === 'mg' ? 0.0011 : 0.011, a * 0.005));
+        answerQuiz(q, raw, q.partOk.every(Boolean)); renderQuiz(host);
+      };
+    }
+    host.onclick = e => {
+      const c = e.target.closest('[data-choice]');
+      if (c && !q.done) { answerQuiz(q, c.dataset.choice, c.dataset.choice === q.a); return renderQuiz(host); }
+      if (e.target.closest('[data-card]')) return goCard(q);
+      if (e.target.closest('[data-qnext]')) {
+        round.i++;
+        if (round.i >= n) { quiz.last = { score: round.score, total: n }; saveQuiz(); }
+        return renderQuiz(host);
+      }
+      if (e.target.closest('[data-quit]')) { round = null; renderQuiz(host); }
+    };
+  }
+
+  function quizHome(host) {
+    const m = Object.keys(quiz.missed).filter(validId).length;
+    host.innerHTML = `
+      <div class="quiz-home">
+        <button class="quiz-pick" data-start="quick"><b>Quick 10 Questions</b>
+          <span>4 what next · 2 values · 1 true/false · 1 which is wrong · 2 dose math</span></button>
+        <button class="quiz-pick" data-start="missed" ${m ? '' : 'disabled'}><b>My missed ones ${m ? `<span class="pill-count">${m}</span>` : ''}</b>
+          <span>${m ? 'Each one comes back until you get it right twice in a row.' : 'Nothing missed yet.'}</span></button>
+        ${quiz.last ? `<p class="small center">Last round: ${quiz.last.score} / ${quiz.last.total}</p>` : ''}
+      </div>`;
+    host.onclick = e => { const b = e.target.closest('[data-start]'); if (b && !b.disabled) { startRound(b.dataset.start); renderQuiz(host); } };
+  }
+
+  function quizEnd(host) {
+    const n = round.qs.length, missed = round.qs.filter(q => !q.ok), m = Object.keys(quiz.missed).filter(validId).length;
+    const pct = n ? round.score / n : 0;
+    host.innerHTML = `
+      <section class="panel quiz-end">
+        <div class="score">${round.score} / ${n}</div>
+        <p class="center">${pct === 1 ? 'Perfect round!' : pct >= .8 ? 'Nice work.' : pct >= .6 ? 'Getting there.' : 'Keep at it. The missed ones will come back.'}</p>
+        ${missed.length ? `<h3>Missed</h3><ul class="missed-list">${missed.map(q => `<li><span>${md(q.q)}</span><span class="ans">${md(answerText(q))}</span></li>`).join('')}</ul>` : ''}
+        <div class="row-end">
+          <button class="btn ghost" data-done>Done</button>
+          ${m ? `<button class="btn ghost" data-start="missed">My missed ones (${m})</button>` : ''}
+          <button class="btn primary" data-start="quick">Quick 10 again</button>
+        </div>
+      </section>`;
+    host.onclick = e => {
+      const b = e.target.closest('[data-start]');
+      if (b) { startRound(b.dataset.start); return renderQuiz(host); }
+      if (e.target.closest('[data-done]')) { round = null; renderQuiz(host); }
     };
   }
 
@@ -2131,6 +2332,8 @@
       const p = await Store.getPrefs();
       if (p && p.theme) { const had = p.theme.v2; Object.assign(theme, p.theme); upgradeTheme(theme); saveTheme(!had); }
       if (p && p.edits) { edits = p.edits; applyEdits(); local.set('edits', edits); }
+      if (p && p.quiz) { Object.assign(quiz, p.quiz); local.set('quiz', quiz); }
+      else if (Object.keys(quiz.missed).length) saveQuiz();
       else if (Object.keys(edits.cards).length + Object.keys(edits.groups).length + Object.keys(edits.meds).length || edits.layout) saveEdits();
       seedPrepNote(p).then(() => updatePrepWeights(p));
     }
