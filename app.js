@@ -1815,7 +1815,7 @@
     host.innerHTML = `
       <div class="quiz-top">
         <span class="pill-count">${round.i + 1} / ${n}</span><span class="qtype">${QTYPE[q.type]}</span>
-        <button class="link" data-quit>Quit</button>
+        <button class="link" data-quit>End</button>
       </div>
       <section class="panel question quiz-q">
         <p class="q">${md(q.q)}</p>
