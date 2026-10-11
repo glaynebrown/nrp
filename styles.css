@@ -362,8 +362,11 @@ li.big {
 .check.on .check-label { text-decoration: none; }
 .weight { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 8px 0 12px; }
 .weight label { font-weight: 800; display: flex; align-items: center; gap: 8px; }
-.weight input[type=number] { width: 84px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); font-weight: 800; font-size: 18px; text-align: center; }
+.weight input[type=number] { width: 96px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); font-weight: 800; font-size: 18px; text-align: center; }
 .weight.big input[type=range] { flex: 1 1 200px; accent-color: var(--accent); height: 28px; }
+.kg-line { margin: 0; font-size: 17px; }  /* grams → kg, right under the scale weight */
+.kg-line b { color: var(--peach-ink); }
+.kg-line small { color: var(--muted); font-size: 13px; }
 .doses { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
 .dose { flex: 1 1 140px; background: var(--lav); border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; }
 .dose span { font-size: 13px; font-weight: 800; color: var(--muted); }

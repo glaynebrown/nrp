@@ -17,6 +17,27 @@
   const round2 = n => Math.round(n * 100) / 100;
   const fmt = n => { const r = round2(n); return r % 1 === 0 ? String(r) : r.toFixed(2).replace(/0$/, ''); };
   const fmtMg = n => String(Math.round(n * 1000) / 1000);  // mg needs 3 decimals (0.048 mg)
+  /* Weight: scales read grams; doses use kg. kg = grams ÷ 1,000, rounded to 2 decimals (2,345 g → 2.35 kg).
+     mL is rounded to what the syringe can measure: 1 mL syringe to 0.01, up to 10 mL to 0.1, bigger to the whole mL. */
+  const gFmt = g => Math.round(g).toLocaleString('en-US') + ' g';
+  const toKg = g => Math.round(g / 10) / 100;
+  const mlStep = ml => ml <= 1 ? 0.01 : ml <= 10 ? 0.1 : 1;
+  const roundMl = ml => { const st = mlStep(ml); return Math.round(Math.round(ml / st + 1e-9) * st * 100) / 100; };
+  // A dose from a scale weight in grams: { kg, exact mL, mL to draw up, mg in what's drawn up }
+  function doseFor(med, g) {
+    const kg = toKg(g), exact = kg * med.mlPerKg, ml = roundMl(exact);
+    return { kg, exact, ml, mg: med.mgPerMl ? Math.round(ml * med.mgPerMl * 1000) / 1000 : null };
+  }
+  // Right answers for a dose: from the rounded kg or the exact weight, and mg from the drawn-up mL or straight from mg/kg.
+  const doseAnswers = (med, g) => [toKg(g), g / 1000].flatMap(kg => {
+    const ml = roundMl(kg * med.mlPerKg);
+    return med.mgPerMl ? [[['mg', ml * med.mgPerMl], ['mL', ml]], [['mg', kg * med.mlPerKg * med.mgPerMl], ['mL', ml]]] : [[['mL', ml]]];
+  });
+  // Is each typed box right? accept = list of answer sets; mg can be off by rounding, mL must match the syringe.
+  const partsOk = (accept, vals) => accept[0].map((_, j) => accept.some(set => {
+    const [u, a] = set[j];
+    return Math.abs(vals[j] - a) <= (u === 'mg' ? 0.0006 : u === 'kg' ? 0.0051 : 0.0001);
+  }));
   const mmss = s => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   function toast(msg) {
     const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -611,11 +632,12 @@
   const saveRun = () => local.set('run', run);
   const now = () => Date.now();
   const since = t => (now() - t) / 1000;
-  function newRun() { return { start: null, step: 'ready', stepAt: now(), log: [], weight: 3, prep: [], epiAt: null, epiCount: 0, checks: [] }; }
+  function newRun() { return { start: null, step: 'ready', stepAt: now(), log: [], g: 3000, prep: [], epiAt: null, epiCount: 0, checks: [] }; }
   function logIt(text) { run.log.push([run.start ? Math.round(since(run.start)) : 0, text]); }
   function go(step, text) { if (text) logIt(text); run.step = step; run.stepAt = now(); run.checks = []; saveRun(); renderRun($('#runBody')); }
-  const dose = id => { const m = NRP.meds.find(x => x.id === id); return round2(run.weight * m.mlPerKg); };
-  const epiSay = id => { const m = NRP.meds.find(x => x.id === id), ml = dose(id); return [fmtMg(ml * m.mgPerMl), fmt(ml)]; };  // [mg, mL]
+  const runG = () => run.g ?? Math.round((run.weight || 3) * 1000);  // grams (older saved runs had kg)
+  const dose = id => doseFor(NRP.meds.find(x => x.id === id), runG()).ml;
+  const epiSay = id => { const d = doseFor(NRP.meds.find(x => x.id === id), runG()); return [fmtMg(d.mg), fmt(d.ml)]; };  // [mg, mL]
   const spo2Now = () => {
     if (!run.start) return null;
     const min = since(run.start) / 60;
@@ -630,7 +652,7 @@
       body: `<p>Estimate the weight, then run the prep questions.</p>
         ${weightPicker()}
         ${checklist(runCard('prep').lines)}`,
-      actions: [['Baby is born · start the clock', () => { run.start = now(); go('rapid', `Birth. Est. weight ${run.weight} kg`); }, 'primary']],
+      actions: [['Baby is born · start the clock', () => { run.start = now(); go('rapid', `Birth. Weight ${gFmt(runG())} (${fmt(toKg(runG()))} kg)`); }, 'primary']],
     }),
     rapid: () => ({
       title: 'Rapid evaluation', phase: 'first', countdown: { from: run.start, secs: 60, label: 'Golden minute' },
@@ -734,9 +756,10 @@
 
   function weightPicker() {
     return `<div class="weight">
-      <label>Weight <input type="number" inputmode="decimal" step="0.1" min="0.3" max="6" value="${run.weight}" data-weight> kg</label>
+      <label>Weight <input type="number" inputmode="numeric" step="1" min="300" max="6000" value="${runG()}" data-weight> g</label>
+      <span class="kg-line">= <b>${fmt(toKg(runG()))} kg</b></span>
       <p class="small">Use the real weight from the warmer scale. Estimates:</p>
-      <div class="chips">${NRP.weights.map(([wk, kg]) => `<button class="chip" data-kg="${kg}">${wk} ≈ ${kg} kg</button>`).join('')}</div>
+      <div class="chips">${NRP.weights.map(([wk, g]) => `<button class="chip" data-g="${g}">${wk} ≈ ${gFmt(g)}</button>`).join('')}</div>
     </div>`;
   }
   function checklist(items) {
@@ -791,14 +814,14 @@
       const g = t.closest('[data-go]'); if (g) return s.actions[+g.dataset.go][1]();
       const c = t.closest('[data-check]');
       if (c) { const i = +c.dataset.check; run.checks.includes(i) ? run.checks.splice(run.checks.indexOf(i), 1) : run.checks.push(i); c.classList.toggle('on'); saveRun(); return; }
-      const kg = t.closest('[data-kg]'); if (kg) { run.weight = +kg.dataset.kg; saveRun(); return renderRun(host); }
+      const kg = t.closest('[data-g]'); if (kg) { run.g = +kg.dataset.g; saveRun(); return renderRun(host); }
       const a = t.closest('[data-act]')?.dataset.act;
       if (a === 'sound') { runSound = !runSound; local.set('runSound', runSound); if (runSound) sound.unlock(); return renderRun(host); }
       if (a === 'reset') { run = newRun(); saveRun(); return renderRun(host); }
       if (a === 'end') return go('debrief', 'Ended');
     };
     const w = $('[data-weight]', host);
-    if (w) w.onchange = () => { const v = parseFloat(w.value); if (v > 0 && v < 8) { run.weight = round2(v); saveRun(); renderRun(host); } };
+    if (w) w.onchange = () => { const v = Math.round(parseFloat(w.value)); if (v >= 200 && v <= 8000) { run.g = v; saveRun(); renderRun(host); } };
     clearInterval(tick);
     const update = () => {
       if (!document.body.contains(host)) return clearInterval(tick);
@@ -875,7 +898,7 @@
     let gest = preterm ? rint(25, 33) : risks.includes('Gestational age < 36 0/7 weeks') ? rint(34, 35) : rint(37, 41);
     if (gest < 37) risks = risks.filter(r => r !== 'Meconium-stained fluid');  // meconium only for term/post-term
     const row = B().weights.find(([a, b]) => gest >= a && gest <= b) || B().weights[B().weights.length - 1];
-    const weight = round2(rnd(row[2], row[3]));
+    const weight = Math.round(rnd(row[2], row[3]) * 1000) / 1000;  // kg, to the gram (the warmer scale reads grams)
     const fix = pick([null, 'M', 'R', 'S', 'O', 'P']);
     const plan = { level: lv.id, hr0: 110, breath: 'apnea', fix: null, airway: false, obstruct: false, comp: false, epiNeed: 0, volume, needFiO2: 21, variant: '' };
     if (lv.id === 'L3' && preterm) Object.assign(plan, { variant: 'labored', hr0: 120, breath: 'labored' });  // mild preterm: CPAP
@@ -912,8 +935,9 @@
     if (p.fix) return !!s.airway || s.letters.includes(p.fix);
     return true;
   };
-  // Estimated weight = middle of the builder's range for the gestation, to one decimal.
-  const estWeight = () => { const r = B().weights.find(([a, b]) => scen.gest >= a && scen.gest <= b); return r ? Math.round((r[2] + r[3]) * 5) / 10 : 3; };
+  // Estimated weight in grams = middle of the builder's range for the gestation, to the nearest 100 g.
+  const estG = () => { const r = B().weights.find(([a, b]) => scen.gest >= a && scen.gest <= b); return r ? Math.round((r[2] + r[3]) * 5) * 100 : 3000; };
+  const scenG = () => scen.weighed ? Math.round(scen.weight * 1000) : estG();  // the weight to dose from
   const spont = () => ['crying', 'breathing', 'labored'].includes(scen.baby.breath);
 
   // ---- The baby, one simulated second at a time ----
@@ -1034,7 +1058,7 @@
     <button class="tool" ${attr}="new">${icons.restart}<span>New</span></button></div>`;
 
   function renderCode(host) {
-    const s = scen.s, b = scen.baby, w = scen.weighed ? `${fmt(scen.weight)} kg` : '? kg';
+    const s = scen.s, b = scen.baby, w = scen.weighed ? gFmt(scen.weight * 1000) : '? g';
     const btn = (act, label, cls = '', extra = '') => `<button class="btn ${cls || 'ghost'} small" data-sa="${act}" ${extra}>${label}</button>`;
     const on = x => x ? 'primary on' : '';
     // Small print under the monitor: when HR was checked, and the SpO2 target.
@@ -1055,7 +1079,7 @@
         </section>
         <section class="actions-panel">
           <h3>Assess</h3>
-          <div class="act-row">${btn('look', 'Look at baby')}${btn('hr', 'Check HR')}${btn('pox', s.pox != null ? 'Pulse ox on' : 'Pulse ox', s.pox != null ? 'done' : '')}${btn('monitor', s.monitor != null ? 'Monitor on' : 'Cardiac monitor', s.monitor != null ? 'done' : '')}${btn('weigh', scen.weighed ? `Weighed ${fmt(scen.weight)} kg` : 'Weigh on warmer', scen.weighed ? 'done' : '')}</div>
+          <div class="act-row">${btn('look', 'Look at baby')}${btn('hr', 'Check HR')}${btn('pox', s.pox != null ? 'Pulse ox on' : 'Pulse ox', s.pox != null ? 'done' : '')}${btn('monitor', s.monitor != null ? 'Monitor on' : 'Cardiac monitor', s.monitor != null ? 'done' : '')}${btn('weigh', scen.weighed ? `Weighed ${gFmt(scen.weight * 1000)}` : 'Weigh on warmer', scen.weighed ? 'done' : '')}</div>
           <h3>Airway + breathing</h3>
           <div class="act-row">${btn('routine', 'Routine care · skin to skin')}${btn('initial', s.initial != null ? 'Initial steps done' : 'Initial steps', s.initial != null ? 'done' : '')}${btn('wrap', s.wrap != null ? 'Wrapped' : 'Plastic bag/wrap', s.wrap != null ? 'done' : '')}
             ${btn('ffo2', s.ffo2 ? 'Free-flow O₂ on' : 'Free-flow O₂', on(s.ffo2))}${btn('cpap', s.cpap ? 'CPAP on' : 'CPAP', on(s.cpap))}${btn('ppv', s.ppv ? 'PPV on · stop' : 'Start PPV', on(s.ppv))}
@@ -1092,8 +1116,8 @@
   }
 
   function doseForm(kind) {
-    const s = scen.s, estKg = estWeight();
-    const wLine = scen.weighed ? `Weight on the warmer: <b>${fmt(scen.weight)} kg</b>` : `Not weighed yet. Estimate for ${scen.gest} wks ≈ <b>${fmt(estKg)} kg</b> (or weigh first).`;
+    const s = scen.s;
+    const wLine = scen.weighed ? `Weight on the warmer: <b>${gFmt(scen.weight * 1000)}</b>` : `Not weighed yet. Estimate for ${scen.gest} wks ≈ <b>${gFmt(estG())}</b> (or weigh first).`;
     if (kind === 'vol') return `<form class="dose-form"><p class="small">${wLine}</p>
       <div class="answer say"><span class="say-lead">The dose is</span><input type="text" inputmode="decimal" autocomplete="off" placeholder="mL" data-dml><span class="say-unit">mL</span></div>
       <div class="chips"><label class="toggle"><input type="radio" name="vt" value="NS" checked> Normal saline</label><label class="toggle"><input type="radio" name="vt" value="O-neg blood"> O-neg blood</label></div>
@@ -1125,13 +1149,12 @@
   }
   const doseNear = (v, a, tol) => v != null && Math.abs(v - a) <= Math.max(tol, a * 0.05);
   function giveVol(ml, kind) {
-    const w = scen.weighed ? scen.weight : estWeight(), ok = doseNear(ml, w * 10, 0.5);
-    scen.s.vols.push({ t: scen.sim, ml, ok, kind }); slog(`Volume: ${kind} ${fmt(ml)} mL${ok ? '' : ` (10 mL/kg = ${fmt(w * 10)} mL)`}`);
+    const d = doseFor(NRP.meds.find(m => m.id === 'ns'), scenG()), ok = doseNear(ml, d.ml, 0.5);
+    scen.s.vols.push({ t: scen.sim, ml, ok, kind }); slog(`Volume: ${kind} ${fmt(ml)} mL${ok ? '' : ` (correct: ${fmt(d.ml)} mL)`}`);
   }
   function giveEpi(route, mg, ml, flush) {
-    const w = scen.weighed ? scen.weight : estWeight();
     const med = NRP.meds.find(m => m.id === (route === 'iv' ? 'epiIV' : 'epiET'));
-    const aMl = w * med.mlPerKg, aMg = aMl * med.mgPerMl, ok = doseNear(mg, aMg, 0.0011) && doseNear(ml, aMl, 0.011);
+    const d = doseFor(med, scenG()), aMl = d.ml, aMg = d.mg, ok = doseNear(mg, aMg, 0.0011) && doseNear(ml, aMl, 0.011);
     scen.s.epis.push({ t: scen.sim, route, mg, ml, ok, flush });
     slog(`Epi ${route === 'iv' ? 'IV/IO' : 'ET'}: ${fmtMg(mg)} mg (${fmt(ml)} mL)${flush ? ' + 3 mL NS flush' : ''}${ok ? '' : ` · correct: ${fmtMg(aMg)} mg (${fmt(aMl)} mL)`}`);
   }
@@ -1155,7 +1178,7 @@
       case 'hr': { const hr = Math.round(b.hr / 6) * 6; s.hrChecks.push([t, hr]); slog(`HR check: ${hr}`); break; }
       case 'pox': set('pox', t, 'Pulse oximeter on (right hand)'); break;
       case 'monitor': set('monitor', t, 'Cardiac monitor on'); break;
-      case 'weigh': if (!scen.weighed) { scen.weighed = true; slog(`Weighed on warmer: ${fmt(scen.weight)} kg`); } break;
+      case 'weigh': if (!scen.weighed) { scen.weighed = true; slog(`Weighed on warmer: ${gFmt(scen.weight * 1000)}`); } break;
       case 'routine': s.routine = true; s.endAt = t; slog('Routine care · skin to skin'); scen.stage = 'debrief'; break;
       case 'initial': set('initial', t, 'Initial steps: warm, dry, position, stimulate, clear airway if needed'); break;
       case 'wrap': set('wrap', t, 'Plastic bag/wrap + thermal mattress'); break;
@@ -1524,7 +1547,7 @@
 
   /* ================= Med math ================= */
   let explainStep = 0;
-  let calcW = local.get('calcW', 3);
+  let calcG = local.get('calcG', Math.round(local.get('calcW', 3) * 1000));  // grams (was kg before Oct 2026)
   const showMath = new Set();
   const drill = { q: null, right: 0, total: 0, streak: 0, best: local.get('best', 0) };
 
@@ -1536,7 +1559,7 @@
       </section>
       <section class="panel">
         <h2><span class="pill">Dose calculator</span></h2>
-        <p class="tip">${md('Every dose is **mL per kg**, so the math is always **weight × the number**.')}</p>
+        <p class="tip">${md('Scales read **grams**: ÷ 1,000 to get **kg**. Every dose is **mL per kg**, so then it’s **kg × the number**.')}</p>
         <div id="calc"></div>
       </section>
       <section class="panel">
@@ -1592,34 +1615,31 @@
     const host = $('#calc');
     host.innerHTML = `
       <div class="weight big">
-        <label>Baby’s weight <input type="number" inputmode="decimal" step="0.1" min="0.3" max="6" value="${calcW}" data-cw> kg</label>
-        <input type="range" min="0.4" max="5" step="0.1" value="${calcW}" data-cr aria-label="Weight slider">
+        <label>Baby’s weight <input type="number" inputmode="numeric" step="1" min="300" max="6000" value="${calcG}" data-cw> g</label>
+        <input type="range" min="400" max="5000" step="10" value="${calcG}" data-cr aria-label="Weight slider">
+        <p class="kg-line">= <b>${fmt(toKg(calcG))} kg</b> <small>(÷ 1,000)</small></p>
         <p class="small">Use the real weight from the warmer scale. Estimates:</p>
-        <div class="chips">${NRP.weights.map(([wk, kg]) => `<button class="chip" data-kg="${kg}">${wk} ≈ ${kg} kg</button>`).join('')}</div>
+        <div class="chips">${NRP.weights.map(([wk, g]) => `<button class="chip" data-g="${g}">${wk} ≈ ${gFmt(g)}</button>`).join('')}</div>
       </div>
       <div class="calc-cards">${NRP.meds.map(m => {
-        const ml = calcW * m.mlPerKg, open = showMath.has(m.id);
+        const d = doseFor(m, calcG), open = showMath.has(m.id);
         return `<div class="calc-card">
           <div class="calc-top"><span class="med">${esc(m.name)}</span><span class="rate">${m.mlPerKg} mL/kg</span></div>
-          ${m.mgPerMl ? `<div class="big-num two" data-fit>${fmtMg(ml * m.mgPerMl)} <small>mg</small> = ${fmt(ml)} <small>mL</small></div>`
-          : `<div class="big-num">${fmt(ml)} <small>mL</small></div>`}
-          ${syringe(ml)}
+          ${m.mgPerMl ? `<div class="big-num two" data-fit>${fmtMg(d.mg)} <small>mg</small> = ${fmt(d.ml)} <small>mL</small></div>`
+          : `<div class="big-num">${fmt(d.ml)} <small>mL</small></div>`}
+          ${syringe(d.ml)}
           <p class="small">${esc(m.note)}</p>
           <button class="link" data-math="${m.id}">${open ? 'Hide' : 'Show'} the math</button>
-          ${open ? `<div class="math">
-            <div>${fmt(calcW)} kg × ${m.mlPerKg} mL/kg = <b>${fmt(ml)} mL</b></div>
-            ${m.mgPerMl ? `<div>${fmt(ml)} mL × ${m.mgPerMl} mg/mL = <b>${fmtMg(ml * m.mgPerMl)} mg</b></div>
-            <div class="small">Shortcut: ${Math.round(m.mlPerKg * m.mgPerMl * 1000) / 1000} mg/kg × ${fmt(calcW)} kg = ${fmtMg(ml * m.mgPerMl)} mg</div>` : ''}
-          </div>` : ''}
+          ${open ? `<div class="math">${doseWork(m, calcG).map(w => `<div>${md(w)}</div>`).join('')}</div>` : ''}
         </div>`;
       }).join('')}</div>
       <p class="small">Visual only. Follow your unit’s printed dosing guide at the bedside.</p>`;
     fitTitles(host);
-    const setW = v => { v = round2(v); if (!(v > 0 && v < 8)) return; calcW = v; local.set('calcW', v); renderCalc(); };
+    const setW = v => { v = Math.round(v); if (!(v >= 200 && v <= 8000)) return; calcG = v; local.set('calcG', v); renderCalc(); };
     $('[data-cw]', host).onchange = e => setW(parseFloat(e.target.value));
     $('[data-cr]', host).oninput = e => setW(parseFloat(e.target.value));
     host.onclick = e => {
-      const k = e.target.closest('[data-kg]'); if (k) return setW(+k.dataset.kg);
+      const k = e.target.closest('[data-g]'); if (k) return setW(+k.dataset.g);
       const m = e.target.closest('[data-math]'); if (m) { const id = m.dataset.math; showMath.has(id) ? showMath.delete(id) : showMath.add(id); renderCalc(); }
     };
   }
@@ -1627,27 +1647,41 @@
   // ---- Drills ----
   const pick = a => a[Math.floor(Math.random() * a.length)];
   function makeQ() {
-    const kind = pick(['dose', 'dose', 'dose', 'dose', 'gest', 'concept']);
+    const kind = pick(['dose', 'dose', 'dose', 'dose', 'gest', 'conv', 'concept']);
     if (kind === 'concept') return pick(CONCEPTS)();
+    if (kind === 'conv') return convQ();
     return doseQ(pick(NRP.meds), kind === 'gest');
   }
-  function doseQ(med, byGest) {
-    const kind = byGest ? 'gest' : 'dose';
-    let w = round2(0.5 + Math.round(Math.random() * 40) / 10);
-    let lead = `A **${fmt(w)} kg** baby`;
-    if (kind === 'gest') { const r = pick(NRP.weights); w = r[1]; lead = `A **${r[0]}** baby (estimate the weight)`; }
-    const ml = round2(w * med.mlPerKg);
-    const est = kind === 'gest' ? `Estimate: ${lead.replace(/\*\*/g, '').replace('A ', '').replace(' baby (estimate the weight)', '')} ≈ ${fmt(w)} kg` : null;
-    // Answered the way it's said in a code: "The dose is __ mg, which is __ mL."
-    if (med.mgPerMl) {
-      const mg = Math.round(ml * med.mgPerMl * 1000) / 1000, mgPerKg = Math.round(med.mlPerKg * med.mgPerMl * 1000) / 1000;
-      return { text: `${lead} needs **${med.name}** (1:10,000).`, parts: [['mg', mg], ['mL', ml]],
-        work: [est, `${fmt(w)} kg × ${med.mlPerKg} mL/kg = **${fmt(ml)} mL**`, `${fmt(ml)} mL × ${med.mgPerMl} mg/mL = **${fmtMg(mg)} mg**`,
-          `Shortcut: ${mgPerKg} mg/kg × ${fmt(w)} kg = ${fmtMg(mg)} mg`].filter(Boolean) };
-    }
-    return { text: `${lead} needs **${med.name}**.`, parts: [['mL', ml]],
-      work: [est, `${med.mlPerKg} mL/kg means multiply by weight`, `${fmt(w)} × ${med.mlPerKg} = **${fmt(ml)} mL**`].filter(Boolean) };
+  // The worked math for a dose from a scale weight, step by step.
+  function doseWork(med, g) {
+    const d = doseFor(med, g), exactKg = g / 1000;
+    const rounded = Math.abs(d.exact - d.ml) > 1e-9;
+    return [
+      `${gFmt(g)} ÷ 1,000 = ${exactKg === d.kg ? `**${fmt(d.kg)} kg**` : `${exactKg} → **${fmt(d.kg)} kg**`}`,
+      `${fmt(d.kg)} kg × ${med.mlPerKg} mL/kg = ${rounded ? `${Math.round(d.exact * 10000) / 10000} → **${fmt(d.ml)} mL** (what the syringe measures)` : `**${fmt(d.ml)} mL**`}`,
+      ...(med.mgPerMl ? [`${fmt(d.ml)} mL × ${med.mgPerMl} mg/mL = **${fmtMg(d.mg)} mg**`,
+        `Shortcut: ${Math.round(med.mlPerKg * med.mgPerMl * 1000) / 1000} mg/kg × ${fmt(d.kg)} kg = ${fmtMg(d.kg * med.mlPerKg * med.mgPerMl)} mg${rounded ? ' (before rounding the mL)' : ''}`] : []),
+    ];
   }
+  const randG = () => 500 + Math.floor(Math.random() * 4001);  // a scale reading, 500–4,500 g
+  // "A baby weighs 2,345 g. That's __ kg."
+  function convQ() {
+    const g = randG(), kg = toKg(g);
+    return { text: `A baby weighs **${gFmt(g)}**. In kg?`, parts: [['kg', kg]], leads: ['That’s'], accept: [[['kg', kg]], [['kg', g / 1000]]],
+      work: [`Grams ÷ 1,000 = kg (move the decimal 3 places left)`, `${gFmt(g)} ÷ 1,000 = ${g / 1000}${g / 1000 === kg ? '' : ` → **${fmt(kg)} kg** (2 decimals)`}`] };
+  }
+  function doseQ(med, byGest) {
+    let g = randG(), lead = `A baby weighs **${gFmt(g)}** and`, est = null;
+    if (byGest) { const r = pick(NRP.weights); g = r[1]; lead = `A **${r[0]}** baby (estimate the weight)`; est = `Estimate: ${r[0]} ≈ ${gFmt(g)}`; }
+    const d = doseFor(med, g), accept = doseAnswers(med, g);
+    // Answered the way it's said in a code: "The dose is __ mg, which is __ mL."
+    return { text: `${lead} needs **${med.name}**${med.mgPerMl ? ' (1:10,000)' : ''}.`, parts: med.mgPerMl ? [['mg', d.mg], ['mL', d.ml]] : [['mL', d.ml]],
+      accept, work: [est, ...doseWork(med, g)].filter(Boolean) };
+  }
+  // What's said after: “The dose is 0.047 mg, which is 0.47 mL.” / “That’s 2.35 kg.”
+  const sayLine = q => q.leads ? `“${q.leads[0]} **${fmt(q.parts[0][1])} ${q.parts[0][0]}**.”`
+    : `“The dose is ${q.parts.map(([u, a]) => `**${u === 'mg' ? fmtMg(a) : fmt(a)} ${u}**`).join(', which is ')}.”`;
+  const sayLead = (q, j) => q.leads ? q.leads[j] : j ? 'which is' : 'The dose is';
   const CONCEPTS = [
     () => ({ text: '1 mL of **1:10,000** epi contains how many mg?', choices: ['0.01 mg', '0.1 mg', '1 mg', '10 mg'], answer: '0.1 mg',
       work: ['1 g in 10,000 mL = 1,000 mg in 10,000 mL', 'Divide by 10,000 → **0.1 mg per mL**'] }),
@@ -1680,13 +1714,13 @@
         <p class="q">${md(q.text)}</p>
         ${q.choices ? `<div class="choices">${q.choices.map(c => `<button class="btn ghost choice${q.done ? (c === q.answer ? ' right' : c === q.given ? ' wrong' : '') : ''}" data-choice="${esc(c)}" ${q.done ? 'disabled' : ''}>${esc(c)}</button>`).join('')}</div>`
         : `<form class="answer say" data-form>
-            ${q.parts.map(([unit], j) => `<span class="say-lead">${j ? 'which is' : 'The dose is'}</span>
+            ${q.parts.map(([unit], j) => `<span class="say-lead">${sayLead(q, j)}</span>
               <input type="text" inputmode="decimal" autocomplete="off" placeholder="${unit}" value="${esc(q.given?.[j] ?? '')}" ${q.done ? 'disabled' : ''} data-ans
                 class="${q.done ? (q.partOk[j] ? 'right' : 'wrong') : ''}" aria-label="Dose in ${unit}"><span class="say-unit">${unit}${j < q.parts.length - 1 ? ',' : '.'}</span>`).join('')}
             <button class="btn primary" ${q.done ? 'disabled' : ''}>Check</button></form>`}
         ${q.done ? `<div class="result ${q.ok ? 'ok' : 'no'}">
             <b>${q.ok ? 'Yes! ✓' : q.choices ? `Not quite. It’s ${esc(q.answer)}` : 'Not quite.'}</b>
-            ${q.parts ? `<p>${md(`“The dose is ${q.parts.map(([u, a]) => `**${u === 'mg' ? fmtMg(a) : fmt(a)} ${u}**`).join(', which is ')}.”`)}</p>` : ''}
+            ${q.parts ? `<p>${md(sayLine(q))}</p>` : ''}
             <ol>${q.work.map(w => `<li>${md(w)}</li>`).join('')}</ol>
           </div>
           <button class="btn primary" data-next>Next question</button>` : ''}
@@ -1705,7 +1739,7 @@
         const vals = raw.map(r => parseFloat(r.replace(/[^\d.]/g, '')));
         const empty = vals.findIndex(isNaN);
         if (empty >= 0) return boxes[empty].focus();  // Enter in the mg box moves on to mL
-        q.partOk = q.parts.map(([u, a], j) => Math.abs(vals[j] - a) <= Math.max(u === 'mg' ? 0.0011 : 0.011, a * 0.005));
+        q.partOk = partsOk(q.accept || [q.parts], vals);
         finish(raw, q.partOk.every(Boolean));
       };
     }
@@ -1735,7 +1769,7 @@
   function doseQuiz(id) {
     const m = medById(id); if (!m) return null;
     const d = doseQ(m, Math.random() < 0.3);
-    return { type: 'dose', card: id === 'ns' ? 'volume' : 'epi', q: d.text, parts: d.parts, work: d.work };
+    return { type: 'dose', card: id === 'ns' ? 'volume' : 'epi', q: d.text, parts: d.parts, accept: d.accept, work: d.work };
   }
   function mlQuiz(id, q) {
     const m = medById(id); if (!m) return null;
@@ -1762,6 +1796,7 @@
       why: `${r[0]} (${r[1]}): ==${r[2]}== tip-to-gum.` };
   }
   const MADE = {
+    'dose-conv': ['dose', () => { const c = convQ(); return { type: 'dose', card: 'epi', q: c.text, parts: c.parts, leads: c.leads, accept: c.accept, work: c.work }; }],
     'dose-epiIV': ['dose', () => doseQuiz('epiIV')], 'dose-epiET': ['dose', () => doseQuiz('epiET')], 'dose-ns': ['dose', () => doseQuiz('ns')],
     'm-epiIV': ['value', () => mlQuiz('epiIV', '**IV/IO epi** dose (1:10,000)?')],
     'm-epiET': ['value', () => mlQuiz('epiET', '**ET epi** dose (1:10,000)?')],
@@ -1796,7 +1831,7 @@
     else if (q.id in quiz.missed && ++quiz.missed[q.id] >= 2) delete quiz.missed[q.id];
     saveQuiz();
   }
-  const doseSay = q => `“The dose is ${q.parts.map(([u, a]) => `**${u === 'mg' ? fmtMg(a) : fmt(a)} ${u}**`).join(', which is ')}.”`;
+  const doseSay = sayLine;
   const answerText = q => q.parts ? doseSay(q) : q.type === 'wrong' ? `Wrong one: **${q.a}**` : `**${q.a}**`;
   function goCard(q) {
     if (q.tab) { location.hash = '#/' + q.tab; return; }
@@ -1826,7 +1861,7 @@
         ${q.choices ? `<div class="choices ${q.type === 'tf' || q.choices.every(c => c.length < 14) ? 'row' : 'stack'}">${q.choices.map(c =>
           `<button class="btn ghost choice${cls(c)}" data-choice="${esc(c)}" ${q.done ? 'disabled' : ''}>${esc(c)}</button>`).join('')}</div>`
         : `<form class="answer say" data-form>
-            ${q.parts.map(([unit], j) => `<span class="say-lead">${j ? 'which is' : 'The dose is'}</span>
+            ${q.parts.map(([unit], j) => `<span class="say-lead">${sayLead(q, j)}</span>
               <input type="text" inputmode="decimal" autocomplete="off" placeholder="${unit}" value="${esc(q.given?.[j] ?? '')}" ${q.done ? 'disabled' : ''} data-ans
                 class="${q.done ? (q.partOk[j] ? 'right' : 'wrong') : ''}" aria-label="Dose in ${unit}"><span class="say-unit">${unit}${j < q.parts.length - 1 ? ',' : '.'}</span>`).join('')}
             <button class="btn primary" ${q.done ? 'disabled' : ''}>Check</button></form>`}
@@ -1849,7 +1884,7 @@
         const vals = raw.map(r => parseFloat(r.replace(/[^\d.]/g, '')));
         const empty = vals.findIndex(isNaN);
         if (empty >= 0) return boxes[empty].focus();
-        q.partOk = q.parts.map(([u, a], j) => Math.abs(vals[j] - a) <= Math.max(u === 'mg' ? 0.0011 : 0.011, a * 0.005));
+        q.partOk = partsOk(q.accept || [q.parts], vals);
         answerQuiz(q, raw, q.partOk.every(Boolean)); renderQuiz(host);
       };
     }

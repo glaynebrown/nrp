@@ -142,8 +142,8 @@ const NRP = {
     },
   ],
 
-  // Gestation → estimated weight (middle of the 9th ed range), for the quick buttons in Med math and Run it.
-  weights: [['28 wks', 1], ['32 wks', 1.3], ['37 wks', 2.2], ['40 wks', 2.8]],
+  // Gestation → estimated weight in grams (middle of the 9th ed range), for the quick buttons in Med math and Scenarios.
+  weights: [['28 wks', 1000], ['32 wks', 1300], ['37 wks', 2200], ['40 wks', 2800]],
 
   // Weight-based doses, from the notes. mgPerMl = concentration.
   meds: [
