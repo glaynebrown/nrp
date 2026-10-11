@@ -162,6 +162,9 @@
   const open = new Set(local.get('open2', ['g-golden']));
   let flowMode = local.get('flowMode', 'ref');
   let studyMode = local.get('studyMode', 'cover');
+  // Opening the app always starts on the Algorithm (Reference), not wherever you left off.
+  if (location.hash !== '#/flow') history.replaceState(null, '', location.pathname + location.search + '#/flow');
+  flowMode = 'ref'; local.set('flowMode', 'ref');
   const revealed = new Set();
 
 
