@@ -30,10 +30,14 @@ const Ink = (() => {
       ctx.fillStyle = ctx.strokeStyle;
       ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], s.w * 0.6, 0, 7); ctx.fill();
     } else {
-      // Smooth curve through midpoints; width follows Pencil pressure.
+      // Smooth curve through midpoints; width follows Pencil pressure, eased
+      // across neighboring points so the line swells gently instead of jumping.
+      const pr = pts.map((_, i) => { let t = 0, n = 0;
+        for (let j = Math.max(0, i - 2); j <= Math.min(pts.length - 1, i + 2); j++) { t += pts[j][2]; n++; }
+        return t / n; });
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1], b = pts[i], prev = pts[i - 2] || a;
-        ctx.lineWidth = s.w * (0.55 + 0.09 * b[2]);
+        ctx.lineWidth = s.w * (0.7 + 0.06 * (pr[i - 1] + pr[i]) / 2);
         ctx.beginPath();
         ctx.moveTo((prev[0] + a[0]) / 2, (prev[1] + a[1]) / 2);
         ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
@@ -73,7 +77,11 @@ const Ink = (() => {
     const canvas = host.querySelector('canvas');
     const page = host.querySelector('.ink-page');
     const ctx = canvas.getContext('2d');
-    let scale = 1;
+    let scale = 1, dpr = 1;
+    // Finished strokes are kept as a picture, so while you draw only the
+    // stroke under your Pencil gets repainted (long pages stay smooth).
+    const base = document.createElement('canvas');
+    const showBase = () => { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(base, 0, 0); ctx.restore(); };
 
     function syncBar() {
       host.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === tool));
@@ -88,7 +96,7 @@ const Ink = (() => {
     function resize() {
       const cssW = page.clientWidth || 600;
       scale = cssW / W;
-      const dpr = window.devicePixelRatio || 1;
+      dpr = window.devicePixelRatio || 1;
       canvas.style.height = height * scale + 'px';
       canvas.width = Math.round(cssW * dpr);
       canvas.height = Math.round(height * scale * dpr);
@@ -107,6 +115,8 @@ const Ink = (() => {
         ctx.restore();
       }
       data.forEach(s => drawStroke(s));
+      base.width = canvas.width; base.height = canvas.height;
+      base.getContext('2d').drawImage(canvas, 0, 0);
     }
 
     const changed = () => { syncBar(); onChange && onChange({ strokes: data, h: height }); };
@@ -114,12 +124,23 @@ const Ink = (() => {
     const snapshot = () => ({ data: data.slice(), height });
 
     // ---- Pointer input ----
-    let live = null, livePts = null, penSeen = false, before = null;
+    let live = null, livePts = null, penSeen = false, before = null, frame = 0, smooth = null;
+    // Exact position (1 decimal) + pressure 0–9 (1 decimal). Fingers and the mouse
+    // have no real pressure, so they draw an even line.
+    const r1 = n => Math.round(n * 10) / 10;
     const pos = e => {
       const r = canvas.getBoundingClientRect();
-      const pr = e.pointerType === 'mouse' || !e.pressure ? 0.5 : e.pressure;
-      return [Math.round((e.clientX - r.left) / scale), Math.round((e.clientY - r.top) / scale), Math.max(0, Math.min(9, Math.round(pr * 9)))];
+      const pr = e.pointerType === 'pen' && e.pressure ? e.pressure : 0.5;
+      return [(e.clientX - r.left) / scale, (e.clientY - r.top) / scale, Math.max(0, Math.min(9, pr * 9))];
     };
+    // Light smoothing: each new point moves most of the way toward the pen,
+    // which evens out tiny hand wobbles without making the line lag.
+    const ease = p => {
+      if (!smooth) smooth = p.slice();
+      else { smooth[0] += (p[0] - smooth[0]) * 0.55; smooth[1] += (p[1] - smooth[1]) * 0.55; smooth[2] += (p[2] - smooth[2]) * 0.3; }
+      return smooth.map(r1);
+    };
+    const paintLive = () => { frame = 0; if (live && !live.erase) { showBase(); drawStroke(live, livePts); } };
     const allowed = e => e.pointerType === 'pen' || e.pointerType === 'mouse' || (e.pointerType === 'touch' && fingerDraws && !penSeen);
 
     function eraseAt(p) {
@@ -138,24 +159,31 @@ const Ink = (() => {
       const p = pos(e);
       if (tool === 'erase') { live = { erase: true, hit: eraseAt(p) }; return; }
       live = { c: color, w: SIZES[size], k: tool === 'hl' ? 'hl' : 'pen' };
-      livePts = [p];
+      smooth = null; livePts = [ease(p)];
     });
     canvas.addEventListener('pointermove', e => {
       if (!live) return;
-      const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      const co = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+      const events = co.length ? co : [e];
       for (const ev of events) {
         const p = pos(ev);
         if (live.erase) { live.hit = eraseAt(p) || live.hit; continue; }
-        const last = livePts[livePts.length - 1];
-        if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 1.5) continue;
-        livePts.push(p);
+        const q = ease(p), last = livePts[livePts.length - 1];
+        if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 0.8) continue;
+        livePts.push(q);
       }
-      if (!live.erase) { redraw(); drawStroke(live, livePts); }
+      if (!live.erase && !frame) frame = requestAnimationFrame(paintLive);
     });
-    const end = () => {
+    const end = e => {
       if (!live) return;
+      if (frame) { cancelAnimationFrame(frame); frame = 0; }
       if (live.erase) { if (live.hit) commit(before); }
-      else { data.push({ ...live, p: encode(livePts) }); redraw(); commit(before); }
+      else {
+        // Finish exactly where the Pencil lifted (smoothing trails a hair behind).
+        if (e && e.clientX != null) { const p = pos(e), last = livePts[livePts.length - 1];
+          if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= 0.8) livePts.push([r1(p[0]), r1(p[1]), last[2]]); }
+        data.push({ ...live, p: encode(livePts) }); redraw(); commit(before);
+      }
       live = null; livePts = null;
     };
     canvas.addEventListener('pointerup', end);
