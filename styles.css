@@ -785,5 +785,4 @@ body.fullpage .container { max-width: none; padding: calc(8px + env(safe-area-in
 /* Drawing toolbar switches (Even line, Finger draws) */
 .ink-opts { display: flex; gap: 14px; align-items: center; margin-left: auto; flex-wrap: wrap; }
 .ink-opts .finger { margin-left: 0; }
-.ink-rate { color: var(--muted); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .folder-top .icon-btn { border: 0; background: none; color: var(--accent); width: auto; padding: 0 4px; font-size: 18px; }  /* plain ••• (no circle) */

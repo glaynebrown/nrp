@@ -52,13 +52,26 @@ const Ink = (() => {
     }
     return pts.filter((_, i) => keep[i]);
   }
+  // Older lines saved some Pencil points twice (the line jumped back and forth = bumps).
+  // Drop any point that repeats one of the last few.
+  function dedupe(pts) {
+    const out = [];
+    for (const p of pts) {
+      let dup = false;
+      for (let j = out.length - 1; j >= Math.max(0, out.length - 8); j--) if (out[j][0] === p[0] && out[j][1] === p[1]) { dup = true; break; }
+      if (!dup) out.push(p);
+    }
+    return out;
+  }
   function prepare(pts, q) {
+    pts = dedupe(pts);
     if (pts.length < 3) return pts;
     // pressure: average over ±4 neighbors (before thinning out the points)
     const sm = pts.map((p, i) => { let t = 0, n = 0;
       for (let j = Math.max(0, i - 4); j <= Math.min(pts.length - 1, i + 4); j++) { t += pts[j][2]; n++; }
       return [p[0], p[1], t / n]; });
-    return densify(simplify(sm, Math.max(0.5, 0.8 * (q || 1))));
+    // Light touch: Pencil positions are exact, so only wobble under ~1/3 px is ignored.
+    return densify(simplify(sm, Math.max(0.2, 0.3 * (q || 1))));
   }
   function densify(pts) {
     if (pts.length < 3) return pts;
@@ -84,7 +97,7 @@ const Ink = (() => {
     }
     const last = pts[pts.length - 1];
     out.push([last[0], last[1], pr[pr.length - 1]]);
-    return evenOut(out, 3);
+    return evenOut(out, 2);
   }
   // Finished-line cleanup: a gentle moving average along the line (about ±5 page units)
   // irons out small bumps but keeps the shape of letters. The ends stay where you put them.
@@ -179,7 +192,6 @@ const Ink = (() => {
           <button data-act="redo" title="Redo">${icon('redo')}</button>
         </div>
         <div class="ink-opts">
-          <small class="ink-rate" data-rate title="Pencil points per second (test)"></small>
           <label class="finger"><input type="checkbox" data-act="even" ${even ? 'checked' : ''}> Even line</label>
           <label class="finger"><input type="checkbox" data-act="finger"> Finger draws</label>
         </div>
@@ -243,7 +255,7 @@ const Ink = (() => {
     const snapshot = () => ({ data: data.slice(), height });
 
     // ---- Pointer input ----
-    let live = null, livePts = null, livePred = [], penSeen = false, before = null, frame = 0;
+    let live = null, livePts = null, livePred = [], penSeen = false, before = null, frame = 0, lastTs = 0, recent = [];
     // Exact position (1 decimal) + pressure 0–9 (1 decimal). Fingers and the mouse
     // have no real pressure, so they draw an even line.
     const r1 = n => Math.round(n * 10) / 10;
@@ -280,20 +292,20 @@ const Ink = (() => {
       before = snapshot();
       const p = pos(e);
       if (tool === 'erase') { live = { erase: true, hit: eraseAt(p) }; return; }
-      rate = e.pointerType === 'pen' ? { n: 0, moves: 0, co: false, t0: e.timeStamp, last: e.timeStamp } : null;
       live = { q: Math.round(100 / scale) / 100, c: color(), w: SIZES[sizes[set()]], k: tool === 'hl' ? 'hl' : 'pen', ...(even ? { e: 1 } : {}) };
-      livePred = [];
+      livePred = []; lastTs = e.timeStamp; recent = [e.clientX + ',' + e.clientY];
       livePts = [ease(p)];
     });
-    // TEMPORARY test readout: how many Pencil points per second Safari hands over.
-    let rate = null;
     canvas.addEventListener('pointermove', e => {
       if (!live) return;
       const co = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
       const events = co.length ? co : [e];
-      if (rate && e.pointerType === 'pen') { rate.n += events.length; rate.moves++; rate.co ||= co.length > 1; rate.last = e.timeStamp;
-        rate.frac ||= events.some(ev => ev.clientX % 1 || ev.clientY % 1); }
       for (const ev of events) {
+        // Safari's extra points can repeat ones already sent: keep only newer, unseen points.
+        if (ev.timeStamp < lastTs) continue;
+        const key = ev.clientX + ',' + ev.clientY;
+        if (recent.includes(key)) continue;
+        lastTs = ev.timeStamp; recent.push(key); if (recent.length > 8) recent.shift();
         const p = pos(ev);
         if (live.erase) { live.hit = eraseAt(p) || live.hit; continue; }
         const q = ease(p), last = livePts[livePts.length - 1];
@@ -309,11 +321,6 @@ const Ink = (() => {
     const end = e => {
       if (!live) return;
       if (frame) { cancelAnimationFrame(frame); frame = 0; }
-      if (rate && rate.last - rate.t0 > 150) {
-        const secs = (rate.last - rate.t0) / 1000;
-        host.querySelector('[data-rate]').textContent = `${Math.round(rate.n / secs)} pts/s · ${Math.round(rate.moves / secs)} moves/s · ${rate.co ? 'extra ✓' : 'extra ✗'} · ${rate.frac ? 'exact' : 'whole px'}`;
-      }
-      rate = null;
       if (live.erase) { if (live.hit) commit(before); }
       else {
         // Finish exactly where the Pencil lifted (smoothing trails a hair behind).
