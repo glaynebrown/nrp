@@ -42,6 +42,8 @@
     return Math.abs(vals[j] - a) <= (u === 'mg' ? 0.0006 : u === 'kg' ? 0.0051 : 0.0001);
   }));
   const mmss = s => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  // A save that fails always says so (never just nothing happening).
+  const saveFailed = e => { console.error(e); toast(e && e.code === 'permission-denied' ? 'Couldn’t save this note. The database refused it.' : 'Couldn’t save. Check your connection.'); };
   function toast(msg) {
     const t = $('#toast'); t.textContent = msg; t.classList.add('show');
     clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2200);
@@ -699,7 +701,7 @@
         if (Store.configured && !user) { location.hash = '#/settings'; return toast('Sign in first to keep notes'); }
         closeEditor();
         const blank = { title: '', text: '', cardId: null, folder: f.id, strokes: [], h: 1300 };
-        const id = await Store.saveNote(blank);
+        let id; try { id = await Store.saveNote(blank); } catch (err) { return saveFailed(err); }
         if (!notes.find(n => n.id === id)) notes = [...notes, { id, ...blank, updated: Date.now() }];
         renderFolder(f);
         toggleNotes('page:' + id);
@@ -824,7 +826,7 @@
         for (const n of inFolder(f.id)) {
           const { id, title = '', text = '', cardId = null, strokes = [], h = 1300 } = n;
           n.folder = 'general';
-          await Store.saveNote({ id, title, text, cardId, folder: 'general', strokes, h }).catch(console.error);
+          await Store.saveNote({ id, title, text, cardId, folder: 'general', strokes, h }).catch(saveFailed);
         }
         folders = folders.filter(x => x !== f); saveFolders();
         location.hash = '#/notes';
@@ -2446,7 +2448,7 @@
       try {
         ed.id = await Store.saveNote({ id: ed.id || undefined, title: n.title, text: n.text, cardId: n.cardId, folder: n.folder || null, strokes: n.strokes, h: n.h });
         const s = $('[data-saved]', ed.host); if (s && !ed.dirty) s.textContent = 'Saved';
-      } catch (e) { console.error(e); toast('Couldn’t save. Check your connection.'); ed.dirty = true; }
+      } catch (e) { saveFailed(e); ed.dirty = true; }
     });
     return ed.chain;
   }
