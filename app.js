@@ -611,9 +611,9 @@
       const label = n.cardId && CARD[n.cardId] ? `<span class="nlabel ph-${NRP.groups.find(g => g.cards.includes(n.cardId)).phase}">${stepLabel(n.cardId)}</span>` : '';
       return `<div class="nitem">
         <button class="nitem-head" data-notes-toggle="${esc(key)}">
-          ${label}<span class="ntitle">${esc(n.cardId && CARD[n.cardId] ? cardTitle(n.cardId) : (n.title || 'Untitled'))}</span><small>${date}</small>
+          ${label}<span class="ntitle">${esc(n.cardId && CARD[n.cardId] ? cardTitle(n.cardId) : (n.title || ''))}</span><small>${date}</small>
         </button>
-        <div class="nitem-prev">
+        <div class="nitem-prev" data-notes-toggle="${esc(key)}">
           ${(n.text || '').trim() ? `<p class="np-text">${esc(n.text)}</p>` : ''}
           ${(n.strokes || []).length ? `<canvas data-preview="${n.id}"></canvas>` : ''}
         </div>
@@ -624,7 +624,7 @@
       <div class="notes-top"><span class="pill">Notes</span><button class="btn primary small" data-act="newnote">+ New note</button></div>
       ${!Store.configured ? '<p class="banner">Sample mode: notes are saved on this device only.</p>' : ''}
       ${Store.configured && !user ? `<p class="banner">Sign in from <a href="#/settings">Settings</a> to keep notes.</p>` : ''}
-      ${extra.length ? `<h3 class="nsec">My notes</h3><div class="nlist">${extra.map(item).join('')}</div>` : ''}
+      ${extra.length ? `<div class="nlist">${extra.map(item).join('')}</div>` : ''}
       <h3 class="nsec">From the algorithm</h3>
       ${stepNotes.length ? `<div class="nlist">${stepNotes.map(item).join('')}</div>`
         : '<p class="empty">Notes you write with the ✎ on any step in Reference show up here.</p>'}`;
@@ -2207,7 +2207,7 @@
     host.innerHTML = `
       <div class="editor">
         <div class="ed-top">
-          ${title ? `<input class="title-in" placeholder="Title" value="${esc(n.title)}" data-title>` : ''}
+          ${title ? `<input class="title-in" placeholder="Title (optional)" value="${esc(n.title)}" data-title>` : ''}
           <span class="saved" data-saved>${n.id ? 'Saved' : ''}</span>
           ${canDelete && n.id ? '<button class="link danger-text" data-del>Delete</button>' : ''}
           <button class="btn primary small" data-done>Done</button>
@@ -2223,7 +2223,9 @@
     ed.ink = Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, onChange: ({ strokes, h }) => { ed.n.strokes = strokes; ed.n.h = h; ed.queue(); } });
     ta.oninput = () => { ed.n.text = ta.value; grow(); ed.queue(); };
     const ti = $('[data-title]', host);
-    if (ti) { ti.oninput = () => { ed.n.title = ti.value; ed.queue(); }; if (!n.title) setTimeout(() => ti.focus({ preventScroll: true }), 50); }
+    if (ti) { ti.oninput = () => { ed.n.title = ti.value; ed.queue(); }; }
+    // A brand-new note starts in the typing box (a title is optional).
+    if (ti && !n.title && !n.text) setTimeout(() => ta.focus({ preventScroll: true }), 50);
     $('[data-done]', host).onclick = () => closeEditor();
     const del = $('[data-del]', host);
     if (del) del.onclick = async () => {

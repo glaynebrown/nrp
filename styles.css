@@ -303,7 +303,8 @@ li.big {
 .nlabel { flex: none; min-width: 34px; height: 30px; padding: 0 8px; border-radius: 99px; display: grid; place-items: center; color: var(--ph-on) !important; background: var(--ph); color: #fff; font-weight: 800; font-size: 14px; }
 .ntitle { flex: 1; font: 800 17px/1.25 var(--hand); color: var(--text); }
 .nitem-head small { color: var(--muted); font-weight: 700; font-size: 12px; }
-.nitem-prev { display: flex; flex-direction: column; gap: 8px; }
+.nitem-prev { display: flex; flex-direction: column; gap: 8px; cursor: pointer; }  /* tap the text to open too */
+.nitem-head .ntitle:empty + small { margin-left: auto; }  /* no title: just the date */
 .nitem-prev canvas { display: block; max-width: 100%; background: var(--soft); border-radius: 10px; }
 .nitem.editing .nitem-prev { display: none; }
 .nitem.editing { border-color: var(--lav-ink); }
