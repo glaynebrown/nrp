@@ -670,7 +670,9 @@ li.big {
 }
 .ink-bar .seg button { display: grid; place-items: center; padding: 6px 8px; }
 .ink-bar .seg button:disabled { opacity: .35; }
-.swatches { display: flex; gap: 4px; }
+.swatches { display: flex; gap: 4px; position: relative; }
+/* Hidden rainbow color chooser: opened by tapping the chosen color again. */
+.sw-picker { position: absolute; left: 0; top: 100%; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; pointer-events: none; }
 .sw { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--card); background: var(--c); box-shadow: 0 0 0 1.5px var(--line); cursor: pointer; padding: 0; }
 .sw.on { box-shadow: 0 0 0 2.5px var(--text); }
 .sizes i { display: block; width: var(--d); height: var(--d); background: currentColor; border-radius: 50%; }
@@ -766,3 +768,6 @@ body.fullpage .container { max-width: none; padding: calc(8px + env(safe-area-in
 .sres .np-text + .sres-folder, .sres .nitem-head + .sres-folder { margin-top: 6px; }
 .sres-folder { display: block; color: var(--muted); font-weight: 700; font-size: 12px; }
 .ed-date { font-weight: 600; }
+
+.ink-reset { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; font-weight: 700; }
+.ink-reset .link:disabled { opacity: .4; cursor: default; text-decoration: none; }

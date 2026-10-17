@@ -2,56 +2,63 @@
 
    Strokes are kept in "page units": the page is always 1000 wide, so a note
    drawn on the iPad lines up the same on the laptop. Each stroke is saved as
-     { c: colorName, w: width, k: 'pen'|'hl', p: "x,y,pressure;x,y,pressure;..." }
-   Colors are saved by NAME (ink, rose, ...) so they follow your theme.
+     { c: color, w: width, k: 'pen'|'hl', p: "x,y,pressure;x,y,pressure;..." }
+   A color is either a NAME (ink, rose, ...; follows your theme, lighter at night) or
+   the exact color (#rrggbb) for colors you picked yourself. Each stroke keeps the color
+   it was drawn in, so changing a preset later never recolors old writing.
+   Lines are drawn as one smooth filled shape (perfect-freehand, freehand.js).
 
    On iPad: the Pencil draws and your finger scrolls (palm-friendly). Turn on
    "Finger draws" to draw with a finger instead. */
 const Ink = (() => {
   const W = 1000;
-  const COLORS = ['ink', 'rose', 'maroon', 'lav', 'peach', 'teal'];
+  // Starting presets (each one can be changed: tap the chosen color again).
+  const DEFAULT_PALETTE = {
+    pen: ['ink', 'rose', 'maroon', 'lav', 'peach', 'teal'],
+    hl: ['#ffe14d', '#ff8fc7', '#7ee08a', '#7cc4ff', '#ffb35c', '#c39bff'],
+  };
   const SIZES = { fine: 2.2, med: 4, bold: 7 };
 
   const decode = s => (s || '').split(';').filter(Boolean).map(t => t.split(',').map(Number));
   const encode = pts => pts.map(p => p.join(',')).join(';');
-  const cssColor = name => getComputedStyle(document.documentElement).getPropertyValue('--ink-' + name).trim() || '#333';
+  const cssColor = c => c && c[0] === '#' ? c
+    : getComputedStyle(document.documentElement).getPropertyValue('--ink-' + c).trim() || '#333';
+  // Any CSS color → #rrggbb (the color chooser needs that form).
+  const toHex = c => { const x = document.createElement('canvas').getContext('2d'); x.fillStyle = '#000'; x.fillStyle = cssColor(c); return x.fillStyle; };
 
-  function paint(ctx, s, pts) {
+  // One stroke = one smooth outline shape. Pressure (0–9 saved) thickens it gently;
+  // strokes with no real pressure (finger, mouse) stay an even width.
+  function paint(ctx, s, pts, done = true) {
     if (!pts.length) return;
+    const hl = s.k === 'hl';
+    const real = pts.some(p => Math.abs(p[2] - pts[0][2]) > 0.05);
+    const outline = getStroke(pts.map(p => [p[0], p[1], p[2] / 9]), hl
+      ? { size: s.w * 4.5, thinning: 0, smoothing: 0.7, streamline: 0.65, simulatePressure: false, last: done }
+      : { size: s.w * 1.1, thinning: real ? 0.45 : 0, smoothing: 0.7, streamline: 0.65, simulatePressure: false, last: done,
+          start: { taper: 0, cap: true }, end: { taper: 0, cap: true } });
+    if (!outline.length) return;
     ctx.save();
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = cssColor(s.c);
-    if (s.k === 'hl') {
-      ctx.globalAlpha = 0.35; ctx.lineWidth = s.w * 4.5;
-      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
-      pts.forEach(p => ctx.lineTo(p[0], p[1]));
-      ctx.stroke();
-    } else if (pts.length === 1) {
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], s.w * 0.6, 0, 7); ctx.fill();
-    } else {
-      // Smooth curve through midpoints; width follows Pencil pressure, eased
-      // across neighboring points so the line swells gently instead of jumping.
-      const pr = pts.map((_, i) => { let t = 0, n = 0;
-        for (let j = Math.max(0, i - 2); j <= Math.min(pts.length - 1, i + 2); j++) { t += pts[j][2]; n++; }
-        return t / n; });
-      for (let i = 1; i < pts.length; i++) {
-        const a = pts[i - 1], b = pts[i], prev = pts[i - 2] || a;
-        ctx.lineWidth = s.w * (0.7 + 0.06 * (pr[i - 1] + pr[i]) / 2);
-        ctx.beginPath();
-        ctx.moveTo((prev[0] + a[0]) / 2, (prev[1] + a[1]) / 2);
-        ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
-        if (i === pts.length - 1) ctx.lineTo(b[0], b[1]);
-        ctx.stroke();
-      }
+    ctx.fillStyle = cssColor(s.c);
+    if (hl) ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(outline[0][0], outline[0][1]);
+    for (let i = 0; i < outline.length; i++) {
+      const a = outline[i], b = outline[(i + 1) % outline.length];
+      ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
     }
+    ctx.closePath(); ctx.fill();
     ctx.restore();
   }
 
-  function mount(host, { strokes = [], h = 1300, ruled = true, onChange }) {
+  // palette: your presets {pen: [6], hl: [6]}; onPalette(palette) when you change one.
+  function mount(host, { strokes = [], h = 1300, ruled = true, onChange, palette, onPalette }) {
     let data = strokes.map(s => ({ ...s }));
     let height = h;
-    let tool = 'pen', color = 'ink', size = 'med', fingerDraws = false;
+    const pal = { pen: [...((palette && palette.pen) || DEFAULT_PALETTE.pen)], hl: [...((palette && palette.hl) || DEFAULT_PALETTE.hl)] };
+    let tool = 'pen', size = 'med', fingerDraws = false;
+    const pick = { pen: 0, hl: 0 };  // which preset is chosen, per tool
+    const set = () => tool === 'hl' ? 'hl' : 'pen';
+    const color = () => pal[set()][pick[set()]];
     const undo = [], redo = [];
 
     host.innerHTML = `
@@ -61,7 +68,8 @@ const Ink = (() => {
           <button data-tool="hl" title="Highlighter">${icon('hl')}</button>
           <button data-tool="erase" title="Eraser (removes whole strokes)">${icon('erase')}</button>
         </div>
-        <div class="swatches">${COLORS.map(c => `<button class="sw" data-color="${c}" style="--c:var(--ink-${c})" title="${c}"></button>`).join('')}</div>
+        <div class="swatches">${[0, 1, 2, 3, 4, 5].map(i => `<button class="sw" data-color="${i}" title="Color (tap again to change)"></button>`).join('')}
+          <input type="color" class="sw-picker" data-picker tabindex="-1" aria-hidden="true"></div>
         <div class="seg sizes">${Object.keys(SIZES).map(s => `<button data-size="${s}" title="${s}"><i style="--d:${SIZES[s] * 2 + 2}px"></i></button>`).join('')}</div>
         <div class="seg">
           <button data-act="undo" title="Undo">${icon('undo')}</button>
@@ -85,7 +93,11 @@ const Ink = (() => {
 
     function syncBar() {
       host.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === tool));
-      host.querySelectorAll('[data-color]').forEach(b => b.classList.toggle('on', b.dataset.color === color));
+      host.querySelectorAll('[data-color]').forEach(b => {
+        b.style.setProperty('--c', cssColor(pal[set()][b.dataset.color]));
+        b.classList.toggle('on', tool !== 'erase' && +b.dataset.color === pick[set()]);
+        b.classList.toggle('hl', set() === 'hl');
+      });
       host.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', b.dataset.size === size));
       host.querySelector('[data-act=undo]').disabled = !undo.length;
       host.querySelector('[data-act=redo]').disabled = !redo.length;
@@ -124,7 +136,7 @@ const Ink = (() => {
     const snapshot = () => ({ data: data.slice(), height });
 
     // ---- Pointer input ----
-    let live = null, livePts = null, penSeen = false, before = null, frame = 0, smooth = null;
+    let live = null, livePts = null, penSeen = false, before = null, frame = 0;
     // Exact position (1 decimal) + pressure 0–9 (1 decimal). Fingers and the mouse
     // have no real pressure, so they draw an even line.
     const r1 = n => Math.round(n * 10) / 10;
@@ -133,14 +145,9 @@ const Ink = (() => {
       const pr = e.pointerType === 'pen' && e.pressure ? e.pressure : 0.5;
       return [(e.clientX - r.left) / scale, (e.clientY - r.top) / scale, Math.max(0, Math.min(9, pr * 9))];
     };
-    // Light smoothing: each new point moves most of the way toward the pen,
-    // which evens out tiny hand wobbles without making the line lag.
-    const ease = p => {
-      if (!smooth) smooth = p.slice();
-      else { smooth[0] += (p[0] - smooth[0]) * 0.55; smooth[1] += (p[1] - smooth[1]) * 0.55; smooth[2] += (p[2] - smooth[2]) * 0.3; }
-      return smooth.map(r1);
-    };
-    const paintLive = () => { frame = 0; if (live && !live.erase) { showBase(); drawStroke(live, livePts); } };
+    // Smoothing happens when the line is drawn (perfect-freehand), so points are kept exactly.
+    const ease = p => p.map(r1);
+    const paintLive = () => { frame = 0; if (live && !live.erase) { showBase(); paint(ctx, live, livePts, false); } };
     const allowed = e => e.pointerType === 'pen' || e.pointerType === 'mouse' || (e.pointerType === 'touch' && fingerDraws && !penSeen);
 
     function eraseAt(p) {
@@ -158,8 +165,8 @@ const Ink = (() => {
       before = snapshot();
       const p = pos(e);
       if (tool === 'erase') { live = { erase: true, hit: eraseAt(p) }; return; }
-      live = { c: color, w: SIZES[size], k: tool === 'hl' ? 'hl' : 'pen' };
-      smooth = null; livePts = [ease(p)];
+      live = { c: color(), w: SIZES[size], k: tool === 'hl' ? 'hl' : 'pen' };
+      livePts = [ease(p)];
     });
     canvas.addEventListener('pointermove', e => {
       if (!live) return;
@@ -169,7 +176,7 @@ const Ink = (() => {
         const p = pos(ev);
         if (live.erase) { live.hit = eraseAt(p) || live.hit; continue; }
         const q = ease(p), last = livePts[livePts.length - 1];
-        if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 0.8) continue;
+        if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 0.4) continue;
         livePts.push(q);
       }
       if (!live.erase && !frame) frame = requestAnimationFrame(paintLive);
@@ -181,7 +188,7 @@ const Ink = (() => {
       else {
         // Finish exactly where the Pencil lifted (smoothing trails a hair behind).
         if (e && e.clientX != null) { const p = pos(e), last = livePts[livePts.length - 1];
-          if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= 0.8) livePts.push([r1(p[0]), r1(p[1]), last[2]]); }
+          if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= 0.4) livePts.push([r1(p[0]), r1(p[1]), last[2]]); }
         data.push({ ...live, p: encode(livePts) }); redraw(); commit(before);
       }
       live = null; livePts = null;
@@ -200,7 +207,17 @@ const Ink = (() => {
     host.addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.tool) tool = b.dataset.tool;
-      if (b.dataset.color) { color = b.dataset.color; if (tool === 'erase') tool = 'pen'; }
+      if (b.dataset.color) {
+        const i = +b.dataset.color;
+        if (tool === 'erase') tool = 'pen';
+        else if (i === pick[set()]) {
+          // Tap the chosen color again → rainbow color chooser to change this preset.
+          const inp = host.querySelector('[data-picker]');
+          inp.value = toHex(pal[set()][i]); inp.dataset.set = set(); inp.dataset.i = i;
+          inp.click(); return;
+        }
+        pick[set()] = i;
+      }
       if (b.dataset.size) { size = b.dataset.size; if (tool === 'erase') tool = 'pen'; }
       const act = b.dataset.act;
       if (act === 'undo' && undo.length) { redo.push(snapshot()); const s = undo.pop(); data = s.data; height = s.height; resize(); changed(); return; }
@@ -210,6 +227,13 @@ const Ink = (() => {
       syncBar();
     });
     host.querySelector('[data-act=finger]').addEventListener('change', e => { fingerDraws = e.target.checked; syncBar(); });
+    const picker = host.querySelector('[data-picker]');
+    const picked = () => {
+      const k = picker.dataset.set, i = +picker.dataset.i; if (!k) return;
+      pal[k][i] = picker.value; syncBar();
+      onPalette && onPalette({ pen: [...pal.pen], hl: [...pal.hl] });
+    };
+    picker.addEventListener('input', picked); picker.addEventListener('change', picked);
 
     const ro = new ResizeObserver(() => resize());
     ro.observe(page);
@@ -251,5 +275,5 @@ const Ink = (() => {
     return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   }
 
-  return { mount, preview };
+  return { mount, preview, DEFAULT_PALETTE };
 })();

@@ -2419,7 +2419,8 @@
     grow();
     const ed = editor = { key, id: n.id || null, host, n: { title: n.title || '', text: n.text || '', cardId: n.cardId || null, folder: n.folder || null, strokes: n.strokes || [], h: n.h || 900 }, dirty: false, timer: null, chain: Promise.resolve() };
     ed.queue = () => { ed.dirty = true; saved.textContent = 'Saving…'; clearTimeout(ed.timer); ed.timer = setTimeout(() => flush(ed), 700); };
-    ed.ink = Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, onChange: ({ strokes, h }) => { ed.n.strokes = strokes; ed.n.h = h; ed.queue(); } });
+    ed.ink = Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, palette: inkPalette, onPalette: saveInkPalette,
+      onChange: ({ strokes, h }) => { ed.n.strokes = strokes; ed.n.h = h; ed.queue(); } });
     ta.oninput = () => { ed.n.text = ta.value; grow(); ed.queue(); };
     const ti = $('[data-title]', host);
     if (ti) { ti.oninput = () => { ed.n.title = ti.value; ed.queue(); }; }
@@ -2438,6 +2439,13 @@
       notes = notes.filter(x => x.id !== ed.id);
       full ? (location.hash = full) : refreshFlow();
     };
+  }
+
+  // Your pen + highlighter color presets (tap a chosen color again to change it). Synced.
+  let inkPalette = local.get('inkPalette', null), inkTimer = null;
+  function saveInkPalette(p) {
+    inkPalette = p; local.set('inkPalette', p);
+    clearTimeout(inkTimer); inkTimer = setTimeout(() => Store.savePrefs({ inkPalette: p }).catch(() => {}), 800);
   }
 
   // Saves run one after another, so a brand-new note is only ever created once.
@@ -2507,6 +2515,7 @@
         <div class="steps-row"><span>Step colors</span><div class="seg">${[['match', 'Matching (sage)'], ['phase', 'By phase']].map(([k, l]) => `<button data-steps="${k}" class="${theme.steps === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
         <div class="tokens">${TOKENS.filter(([k]) => theme.steps === 'phase' || !k.startsWith('st-')).map(([k, label]) => `<label class="tok"><input type="color" value="${c[k]}" data-tok="${k}"><span>${esc(tokenLabel(k, label))}</span>${theme.custom[theme.look]?.[k] ? `<button class="link" data-reset="${k}">reset</button>` : ''}</label>`).join('')}</div>
         <button class="btn ghost small" data-resetall ${Object.keys(theme.custom[theme.look] || {}).length ? '' : 'disabled'}>Reset “${esc(LOOKS[theme.look].name)}” colors</button>
+        <div class="ink-reset"><span>Pen + highlighter colors</span><button class="link" data-inkreset ${inkPalette ? '' : 'disabled'}>Reset to original</button></div>
       </section>
       <section class="panel">
         <h2><span class="pill">Fonts</span></h2>
@@ -2544,6 +2553,7 @@
       i.oninput = pick; i.onchange = pick;
     });
     $$('[data-reset]').forEach(b => b.onclick = resetTok);
+    $('[data-inkreset]').onclick = () => { inkPalette = null; local.set('inkPalette', null); Store.savePrefs({ inkPalette: null }).catch(() => {}); toast('Pen + highlighter colors reset'); renderSettings(); };
     $('[data-resetall]').onclick = () => { theme.custom[theme.look] = {}; saveTheme(); renderSettings(); };
     $('[data-export]').onclick = () => {
       const blob = new Blob([JSON.stringify({ app: 'NRP', exported: new Date().toISOString(), notes }, null, 1)], { type: 'application/json' });
@@ -2633,6 +2643,8 @@
       if (p && p.quiz) { Object.assign(quiz, p.quiz); local.set('quiz', quiz); }
       else if (Object.keys(quiz.missed).length) saveQuiz();
       else if (Object.keys(edits.cards).length + Object.keys(edits.groups).length + Object.keys(edits.meds).length || edits.layout) saveEdits();
+      if (p && p.inkPalette !== undefined) { inkPalette = p.inkPalette; local.set('inkPalette', inkPalette); }
+      else if (inkPalette) Store.savePrefs({ inkPalette }).catch(() => {});
       if (p && p.folders) { folders = p.folders; keepGeneral(); local.set('folders', folders); }
       else saveFolders();
       seedPrepNote(p).then(() => updatePrepWeights(p));
