@@ -656,9 +656,10 @@
       if (!q) return $('[data-results]', host).innerHTML = '';
       const hits = ownNotes().filter(n => `${n.title || ''}\n${n.text || ''}`.toLowerCase().includes(q)).sort((a, b) => (b.updated || 0) - (a.updated || 0));
       $('[data-results]', host).innerHTML = hits.length ? `<div class="nlist">${hits.map(n => `
-        <a class="nitem sres" href="#/notes/${esc(folderOf(n))}/${esc(n.id)}">
-          <div class="nitem-head"><span class="ntitle">${esc(n.title || '')}</span><small>${esc(folders.find(f => f.id === folderOf(n)).name)} · ${shortDate(n)}</small></div>
+        <a class="nitem sres${n.title ? '' : ' notitle'}" href="#/notes/${esc(folderOf(n))}/${esc(n.id)}">
+          ${n.title ? `<div class="nitem-head"><span class="ntitle">${esc(n.title)}</span></div>` : ''}
           ${(n.text || '').trim() ? `<p class="np-text clamp">${esc(n.text)}</p>` : ''}
+          <small class="sres-folder">${esc(folders.find(f => f.id === folderOf(n)).name)}</small>
         </a>`).join('')}</div>` : '<p class="empty">No notes match.</p>';
     };
     box.oninput = search;
@@ -677,11 +678,13 @@
     const list = inFolder(f.id);
     const item = n => {
       const key = 'page:' + n.id;
-      return `<div class="nitem" data-id="${esc(n.id)}">
-        <button class="nitem-head" data-notes-toggle="${esc(key)}"><span class="ntitle">${esc(n.title || '')}</span><small>${shortDate(n)}</small></button>
+      // No dates on the cards (learning notes); the date shows inside an open note.
+      return `<div class="nitem${n.title ? '' : ' notitle'}" data-id="${esc(n.id)}">
+        ${n.title ? `<button class="nitem-head" data-notes-toggle="${esc(key)}"><span class="ntitle">${esc(n.title)}</span></button>` : ''}
         <div class="nitem-prev" data-notes-toggle="${esc(key)}">
           ${(n.text || '').trim() ? `<p class="np-text">${esc(n.text)}</p>` : ''}
           ${(n.strokes || []).length ? `<canvas data-preview="${n.id}"></canvas>` : ''}
+          ${!n.title && !(n.text || '').trim() && !(n.strokes || []).length ? '<p class="np-text muted">Empty note</p>' : ''}
         </div>
         <div class="notes-area" data-notes="${esc(key)}" hidden></div>
       </div>`;
@@ -2400,7 +2403,7 @@
       <div class="editor">
         <div class="ed-top">
           ${title ? `<input class="title-in" placeholder="Title (optional)" value="${esc(n.title)}" data-title>` : ''}
-          <span class="saved" data-saved>${n.id ? 'Saved' : ''}</span>
+          <span class="saved"><span data-saved>${n.id ? 'Saved' : ''}</span>${own && n.updated ? `<span class="ed-date" data-eddate> · Edited ${shortDate(n)}</span>` : ''}</span>
           ${own && !full && n.id ? `<button class="icon-btn" data-expand aria-label="Full screen" title="Full screen">${icons.expand}</button>` : ''}
           <button class="btn primary small" data-done>Done</button>
         </div>
@@ -2448,6 +2451,7 @@
       try {
         ed.id = await Store.saveNote({ id: ed.id || undefined, title: n.title, text: n.text, cardId: n.cardId, folder: n.folder || null, strokes: n.strokes, h: n.h });
         const s = $('[data-saved]', ed.host); if (s && !ed.dirty) s.textContent = 'Saved';
+        const d = $('[data-eddate]', ed.host); if (d) d.textContent = ' · Edited ' + shortDate({ updated: Date.now() });
       } catch (e) { saveFailed(e); ed.dirty = true; }
     });
     return ed.chain;

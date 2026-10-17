@@ -759,3 +759,10 @@ body.fullpage .container { max-width: none; padding: calc(8px + env(safe-area-in
 .dragging { position: relative; z-index: 10; box-shadow: 0 14px 34px -8px rgb(0 0 0 / .3) !important; scale: 1.02; background: var(--card); border-radius: 14px; transition: scale .15s, box-shadow .15s; }
 .folders.sorting { overflow: visible; }
 .sorting .folder:not(.dragging) { pointer-events: none; }
+
+/* Notes without a title: text starts right at the top of the card (no dates on cards). */
+.nitem.notitle { padding-top: 12px; }
+.np-text.muted { color: var(--muted); font-style: italic; }
+.sres .np-text + .sres-folder, .sres .nitem-head + .sres-folder { margin-top: 6px; }
+.sres-folder { display: block; color: var(--muted); font-weight: 700; font-size: 12px; }
+.ed-date { font-weight: 600; }
