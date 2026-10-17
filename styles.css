@@ -676,7 +676,6 @@ li.big {
 .sw { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--card); background: var(--c); box-shadow: 0 0 0 1.5px var(--line); cursor: pointer; padding: 0; }
 .sw.on { box-shadow: 0 0 0 2.5px var(--text); }
 .sizes i { display: block; width: var(--d); height: var(--d); background: currentColor; border-radius: 50%; }
-.finger { font-size: 13px; font-weight: 700; display: flex; gap: 6px; align-items: center; margin-left: auto; color: var(--muted); }
 .ink-page { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 10px; }
 .ink-page canvas { display: block; width: 100%; }
 .ink-foot { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
@@ -783,6 +782,22 @@ body.fullpage .container { max-width: none; padding: calc(8px + env(safe-area-in
 .pv-tap { text-align: center; color: var(--muted); font-size: 13px; font-weight: 700; margin: 0; }
 
 /* Drawing toolbar switches (Even line, Finger draws) */
-.ink-opts { display: flex; gap: 14px; align-items: center; margin-left: auto; flex-wrap: wrap; }
-.ink-opts .finger { margin-left: 0; }
 .folder-top .icon-btn { border: 0; background: none; color: var(--accent); width: auto; padding: 0 4px; font-size: 18px; }  /* plain ••• (no circle) */
+
+/* Drawing toolbar + Settings checkboxes use the app's colors, not the default bright blue. */
+.toggle input { accent-color: var(--accent); }
+.ink-pressure { margin-top: 14px; flex-wrap: wrap; }
+.ink-pressure small { color: var(--muted); font-weight: 600; }
+
+/* Drawing toolbar: tools · sizes · finger/pencil button · 6 colors · undo/redo at the far right.
+   iPhone: two rows (tools + sizes + finger / colors + undo/redo). */
+.ink-break { display: none; }
+.ink-undo { margin-left: auto; }
+.ink-mode { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--line); background: var(--soft); color: var(--muted); cursor: pointer; padding: 0; flex: none; }
+.ink-mode.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.ink-mode svg { width: 20px; height: 20px; }
+@media (max-width: 560px) {
+  .ink-break { display: block; flex-basis: 100%; height: 0; }
+  .ink-bar { row-gap: 6px; }
+  .ink-bar .sw { width: 26px; height: 26px; }  /* 6 colors + undo/redo fit on the second row */
+}

@@ -2454,7 +2454,7 @@
     grow();
     const ed = editor = { key, id: n.id || null, host, n: { title: n.title || '', text: n.text || '', cardId: n.cardId || null, folder: n.folder || null, strokes: n.strokes || [], h: n.h || 900 }, dirty: false, timer: null, chain: Promise.resolve() };
     ed.queue = () => { ed.dirty = true; saved.textContent = 'Saving…'; clearTimeout(ed.timer); ed.timer = setTimeout(() => flush(ed), 700); };
-    ed.ink = Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, palette: inkPalette, onPalette: saveInkPalette,
+    ed.ink = Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, palette: inkPalette, onPalette: saveInkPalette, pressure: !!(inkPalette && inkPalette.pressure), notify: toast,
       onChange: ({ strokes, h }) => { ed.n.strokes = strokes; ed.n.h = h; ed.queue(); } });
     ta.oninput = () => { ed.n.text = ta.value; grow(); ed.queue(); };
     const ti = $('[data-title]', host);
@@ -2550,6 +2550,7 @@
         <div class="steps-row"><span>Step colors</span><div class="seg">${[['match', 'Matching (sage)'], ['phase', 'By phase']].map(([k, l]) => `<button data-steps="${k}" class="${theme.steps === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
         <div class="tokens">${TOKENS.filter(([k]) => theme.steps === 'phase' || !k.startsWith('st-')).map(([k, label]) => `<label class="tok"><input type="color" value="${c[k]}" data-tok="${k}"><span>${esc(tokenLabel(k, label))}</span>${theme.custom[theme.look]?.[k] ? `<button class="link" data-reset="${k}">reset</button>` : ''}</label>`).join('')}</div>
         <button class="btn ghost small" data-resetall ${Object.keys(theme.custom[theme.look] || {}).length ? '' : 'disabled'}>Reset “${esc(LOOKS[theme.look].name)}” colors</button>
+        <label class="toggle ink-pressure"><input type="checkbox" data-pressure ${inkPalette && inkPalette.pressure ? 'checked' : ''}> Pencil pressure <small>(lines get thicker when you press harder; off = even lines)</small></label>
         <div class="ink-reset"><span>Pen + highlighter colors and sizes</span><button class="link" data-inkreset ${inkPalette ? '' : 'disabled'}>Reset to original</button></div>
       </section>
       <section class="panel">
@@ -2588,6 +2589,7 @@
       i.oninput = pick; i.onchange = pick;
     });
     $$('[data-reset]').forEach(b => b.onclick = resetTok);
+    $('[data-pressure]').onchange = e => { saveInkPalette({ ...(inkPalette || {}), pressure: e.target.checked }); };
     $('[data-inkreset]').onclick = () => { inkPalette = null; local.set('inkPalette', null); Store.savePrefs({ inkPalette: null }).catch(() => {}); toast("Pen + highlighter colors and sizes reset"); renderSettings(); };
     $('[data-resetall]').onclick = () => { theme.custom[theme.look] = {}; saveTheme(); renderSettings(); };
     $('[data-export]').onclick = () => {

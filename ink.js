@@ -164,14 +164,17 @@ const Ink = (() => {
   }
 
   // palette: your presets {pen: [6], hl: [6]}; onPalette(palette) when you change one.
-  function mount(host, { strokes = [], h = 1300, ruled = true, onChange, palette, onPalette }) {
+  // pressure: true = lines thicken when you press harder (Settings); otherwise every line is even.
+  function mount(host, { strokes = [], h = 1300, ruled = true, onChange, palette, onPalette, pressure = false, notify }) {
     let data = strokes.map(s => ({ ...s }));
     let height = h;
     const pal = { pen: [...((palette && palette.pen) || DEFAULT_PALETTE.pen)], hl: [...((palette && palette.hl) || DEFAULT_PALETTE.hl)] };
-    let tool = 'pen', fingerDraws = false;
+    // iPhone (no Apple Pencil): your finger draws from the start. iPad: the Pencil draws, finger scrolls.
+    const phone = Math.min(screen.width, screen.height) < 600 && navigator.maxTouchPoints > 0;
+    let tool = 'pen', fingerDraws = phone;
     // Pen and highlighter each remember their own size.
     const sizes = { pen: 'med', hl: 'med', ...((palette && palette.size) || {}) };
-    let even = false; try { even = localStorage.getItem('nrp-inkEven') === '1'; } catch {}
+    const even = !pressure;
     const pick = { pen: 0, hl: 0 };  // which preset is chosen, per tool
     const set = () => tool === 'hl' ? 'hl' : 'pen';
     const color = () => pal[set()][pick[set()]];
@@ -184,16 +187,14 @@ const Ink = (() => {
           <button data-tool="hl" title="Highlighter">${icon('hl')}</button>
           <button data-tool="erase" title="Eraser (removes whole strokes)">${icon('erase')}</button>
         </div>
+        <div class="seg sizes">${Object.keys(SIZES).map(s => `<button data-size="${s}" title="${s}"><i style="--d:${SIZES[s] * 2 + 2}px"></i></button>`).join('')}</div>
+        <button class="ink-mode" data-act="finger" title="Pencil only (tap so your finger draws too)"></button>
+        <span class="ink-break"></span>
         <div class="swatches">${[0, 1, 2, 3, 4, 5].map(i => `<button class="sw" data-color="${i}" title="Color (tap again to change)"></button>`).join('')}
           <input type="color" class="sw-picker" data-picker tabindex="-1" aria-hidden="true"></div>
-        <div class="seg sizes">${Object.keys(SIZES).map(s => `<button data-size="${s}" title="${s}"><i style="--d:${SIZES[s] * 2 + 2}px"></i></button>`).join('')}</div>
-        <div class="seg">
+        <div class="seg ink-undo">
           <button data-act="undo" title="Undo">${icon('undo')}</button>
           <button data-act="redo" title="Redo">${icon('redo')}</button>
-        </div>
-        <div class="ink-opts">
-          <label class="finger"><input type="checkbox" data-act="even" ${even ? 'checked' : ''}> Even line</label>
-          <label class="finger"><input type="checkbox" data-act="finger"> Finger draws</label>
         </div>
       </div>
       <div class="ink-page"><canvas></canvas></div>
@@ -221,6 +222,10 @@ const Ink = (() => {
       host.querySelector('[data-act=undo]').disabled = !undo.length;
       host.querySelector('[data-act=redo]').disabled = !redo.length;
       canvas.style.touchAction = fingerDraws ? 'none' : 'pan-y';
+      const fm = host.querySelector('[data-act=finger]');
+      fm.innerHTML = icon(fingerDraws ? 'finger' : 'pen'); fm.classList.toggle('on', fingerDraws);
+      fm.title = fingerDraws ? 'Finger draws (tap for Pencil only)' : 'Pencil only (tap so your finger draws too)';
+      fm.setAttribute('aria-label', fm.title);
       canvas.style.cursor = tool === 'erase' ? 'cell' : 'crosshair';
     }
 
@@ -360,14 +365,13 @@ const Ink = (() => {
         sizes[set()] = b.dataset.size; savePal();
       }
       const act = b.dataset.act;
+      if (act === 'finger') { fingerDraws = !fingerDraws; syncBar(); notify && notify(fingerDraws ? 'Finger draws' : 'Pencil only'); return; }
       if (act === 'undo' && undo.length) { redo.push(snapshot()); const s = undo.pop(); data = s.data; height = s.height; resize(); changed(); return; }
       if (act === 'redo' && redo.length) { undo.push(snapshot()); const s = redo.pop(); data = s.data; height = s.height; resize(); changed(); return; }
       if (act === 'more') { const b4 = snapshot(); height += 600; resize(); commit(b4); return; }
       if (act === 'clear' && data.length) { const b4 = snapshot(); data = []; redraw(); commit(b4); return; }
       syncBar();
     });
-    host.querySelector('[data-act=finger]').addEventListener('change', e => { fingerDraws = e.target.checked; syncBar(); });
-    host.querySelector('[data-act=even]').addEventListener('change', e => { even = e.target.checked; try { localStorage.setItem('nrp-inkEven', even ? '1' : '0'); } catch {} });
     function savePal() { onPalette && onPalette({ pen: [...pal.pen], hl: [...pal.hl], size: { ...sizes } }); }
     const picker = host.querySelector('[data-picker]');
     const picked = () => {
@@ -413,6 +417,7 @@ const Ink = (() => {
       erase: '<path d="M8 20h12"/><path d="M4 15l9-10 7 7-8 8H9z"/>',
       undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
       redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/>',
+      finger: '<path d="M9 11V5a1.5 1.5 0 013 0v5"/><path d="M12 10V8.5a1.5 1.5 0 013 0V11"/><path d="M15 10.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1a6 6 0 01-4.6-2.2L4 15.5a1.6 1.6 0 012.4-2.1L9 16"/>',
     }[n];
     return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   }
