@@ -275,5 +275,15 @@ const Ink = (() => {
     return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   }
 
-  return { mount, preview, DEFAULT_PALETTE };
+  // The whole page (1000 × h page units) drawn read-only at cssW pixels wide.
+  function page(canvas, strokes, h, cssW) {
+    const scale = cssW / W, dpr = window.devicePixelRatio || 1;
+    canvas.style.width = cssW + 'px'; canvas.style.height = h * scale + 'px';
+    canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(h * scale * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+    (strokes || []).forEach(s => paint(ctx, s, decode(s.p)));
+  }
+
+  return { mount, preview, page, DEFAULT_PALETTE };
 })();

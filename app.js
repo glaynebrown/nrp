@@ -209,6 +209,7 @@
     if (tab === 'page') { tab = 'notes'; arg = arg2 = undefined; }
     closeEditor();
     document.body.classList.remove('fullpage');
+    fullEditing = false; pageViewFit = null;
     notesArgs = [arg, arg2];
     curTab = tab;
     if (tab !== 'notes') backHash = location.hash || '#/flow';
@@ -716,6 +717,9 @@
   }
 
   // A note on the whole screen (header + tabs hidden). "One page" folders always open like this.
+  // It opens as a VIEW: the whole page shrunk to fit the screen (title/typing only if there are any).
+  // Tap it to edit (tools, colors, typing); Done comes back to the view.
+  let fullEditing = false;
   function renderFullNote(f, nid) {
     const isPage = f.layout === 'page' && !nid;
     const n = nid ? notes.find(x => x.id === nid) : inFolder(f.id)[0];
@@ -728,10 +732,41 @@
     if (isPage) $('[data-fmenu]').onclick = () => folderMenu(f);
     const host = $('[data-full]');
     if (Store.configured && !user) { host.innerHTML = `<p class="small signin-hint">Sign in from <a href="#/settings">Settings</a> to keep notes on all your devices.</p>`; return; }
+    const again = () => renderFullNote(f, nid);
+    if (!fullEditing) return renderPageView(host, n, () => { fullEditing = true; again(); });
     // A new page is only saved once you write something.
     mountEditor(host, n || { title: '', text: '', cardId: null, folder: f.id, strokes: [], h: 1300 },
-      { key: 'page:' + (n ? n.id : 'new-' + f.id), title: true, canDelete: true, full: back });
+      { key: 'page:' + (n ? n.id : 'new-' + f.id), title: true, canDelete: true, full: back,
+        onDone: () => { closeEditor(); fullEditing = false; again(); } });
   }
+  // The fitted, read-only page. Only what's there: title, typing, handwriting.
+  function renderPageView(host, n, edit) {
+    const text = (n && n.text || '').trim(), strokes = (n && n.strokes) || [];
+    const empty = !n || (!text && !strokes.length && !(n.title || '').trim());
+    host.innerHTML = `<div class="page-view" data-edit role="button" tabindex="0" aria-label="Edit this note">
+      ${n && n.title ? `<h2 class="pv-title">${esc(n.title)}</h2>` : ''}
+      ${text ? `<p class="np-text pv-text">${esc(n.text)}</p>` : ''}
+      ${strokes.length || empty ? '<div class="pv-page"><canvas></canvas>' + (empty ? '<span class="pv-hint">Tap to start writing</span>' : '') + '</div>' : ''}
+      ${empty ? '' : '<p class="pv-tap">Tap to edit</p>'}
+    </div>`;
+    const pv = $('[data-edit]', host);
+    pv.onclick = edit;
+    pv.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); edit(); } };
+    const cv = $('.pv-page canvas', host);
+    if (!cv) return;
+    // Whole page (blank space included) as big as fits: limited by width and by the room left on screen.
+    const h = (n && n.h) || 1300;
+    const fit = () => {
+      const box = cv.parentElement;
+      const roomH = window.innerHeight - (box.getBoundingClientRect().top + window.scrollY) - 44;
+      const w = Math.max(120, Math.min(pv.clientWidth, Math.max(160, roomH) * 1000 / h));
+      Ink.page(cv, strokes, h, w);
+    };
+    fit();
+    pageViewFit = fit;
+  }
+  let pageViewFit = null;
+  window.addEventListener('resize', () => { if (pageViewFit && document.body.classList.contains('fullpage') && $('.page-view canvas')) pageViewFit(); });
 
   /* Hold-and-drag to reorder (folders, notes). Hold ~half a second and the item lifts;
      a quick swipe still scrolls and a quick tap still opens. Near the top/bottom edge the
@@ -2397,7 +2432,7 @@
   // Typing + Pencil area, opened inside a card or a Notes item.
   // A step's note is only created once you actually write something.
   // full = the page to go back to when the note is on the whole screen.
-  function mountEditor(host, n, { key, title, canDelete, full }) {
+  function mountEditor(host, n, { key, title, canDelete, full, onDone }) {
     const own = title;  // your own notes (not a step's ✎ note) have a title, a folder and full screen
     host.innerHTML = `
       <div class="editor">
@@ -2426,7 +2461,7 @@
     if (ti) { ti.oninput = () => { ed.n.title = ti.value; ed.queue(); }; }
     // A brand-new note starts in the typing box (a title is optional).
     if (ti && !n.title && !n.text) setTimeout(() => ta.focus({ preventScroll: true }), 50);
-    $('[data-done]', host).onclick = () => full ? (location.hash = full) : closeEditor();
+    $('[data-done]', host).onclick = () => onDone ? onDone() : full ? (location.hash = full) : closeEditor();
     const fs = $('[data-folder]', host);
     if (fs) fs.onchange = () => { ed.n.folder = fs.value; ed.queue(); toast('Moved to ' + folders.find(f => f.id === fs.value).name); };
     const ex = $('[data-expand]', host);

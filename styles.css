@@ -771,3 +771,13 @@ body.fullpage .container { max-width: none; padding: calc(8px + env(safe-area-in
 
 .ink-reset { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; font-weight: 700; }
 .ink-reset .link:disabled { opacity: .4; cursor: default; text-decoration: none; }
+
+/* Full-screen VIEW of a note: the whole page fits the screen; tap to edit. */
+.page-view { display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; outline: none; }
+.page-view > :not(.pv-page) { align-self: stretch; }
+.pv-title { font: 800 24px/1.2 var(--hand); color: var(--text); margin: 0; }
+.pv-text { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.pv-page { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.pv-page canvas { display: block; }
+.pv-hint { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-weight: 700; }
+.pv-tap { text-align: center; color: var(--muted); font-size: 13px; font-weight: 700; margin: 0; }
