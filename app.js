@@ -616,7 +616,13 @@
   let noteSearch = '';
   const ownNotes = () => notes.filter(n => !n.cardId || (!CARD[n.cardId] && hasContent(n)));
   const folderOf = n => folders.some(f => f.id === n.folder) ? n.folder : 'general';
-  const inFolder = fid => ownNotes().filter(n => folderOf(n) === fid).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  // Newest first, until you drag notes into your own order (f.order = note ids). New notes go on top.
+  const inFolder = fid => {
+    const order = folders.find(f => f.id === fid)?.order || [];
+    const at = id => { const i = order.indexOf(id); return i < 0 ? -1 : i; };
+    return ownNotes().filter(n => folderOf(n) === fid)
+      .sort((a, b) => (at(a.id) < 0 || at(b.id) < 0) ? (at(a.id) < 0) === (at(b.id) < 0) ? (b.updated || 0) - (a.updated || 0) : at(a.id) < 0 ? -1 : 1 : at(a.id) - at(b.id));
+  };
   const folderIcon = f => { const i = STEP_ICONS.find(([k]) => k === f.icon); return `<span class="ficon">${i ? svg(i[2]) : icons.folder}</span>`; };
   const shortDate = n => new Date(n.updated || 0).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const signinBanner = () => !Store.configured ? '<p class="banner">Sample mode: notes are saved on this device only.</p>'
@@ -637,7 +643,7 @@
       <input class="search" type="search" placeholder="Search notes" data-search value="${esc(noteSearch)}" autocomplete="off">
       <div data-results></div>
       <div data-folderlist>
-        <div class="folders">${folders.map(f => `<a class="folder" href="#/notes/${esc(f.id)}">${folderIcon(f)}<span class="fname">${esc(f.name)}</span>${f.layout === 'page' ? '<small class="fkind">One page</small>' : ''}<span class="fcount">${inFolder(f.id).length}</span><span class="chev-r"></span></a>`).join('')}</div>
+        <div class="folders">${folders.map(f => `<a class="folder" data-id="${esc(f.id)}" href="#/notes/${esc(f.id)}">${folderIcon(f)}<span class="fname">${esc(f.name)}</span>${f.layout === 'page' ? '<small class="fkind">One page</small>' : ''}<span class="fcount">${inFolder(f.id).length}</span><span class="chev-r"></span></a>`).join('')}</div>
         <button class="btn ghost small" data-newfolder>+ New folder</button>
       </div></div>`;
     const host = $('#notesBody'), box = $('[data-search]', host);
@@ -655,6 +661,7 @@
     };
     box.oninput = search;
     search();
+    dragSort($('.folders', host), '.folder', ids => { folders = ids.map(id => folders.find(f => f.id === id)).filter(Boolean); saveFolders(); });
     $('[data-newfolder]', host).onclick = async () => {
       const name = await promptText('New folder', '', 'Create'); if (!name) return;
       const gi = folders.findIndex(f => f.id === 'general');
@@ -668,7 +675,7 @@
     const list = inFolder(f.id);
     const item = n => {
       const key = 'page:' + n.id;
-      return `<div class="nitem">
+      return `<div class="nitem" data-id="${esc(n.id)}">
         <button class="nitem-head" data-notes-toggle="${esc(key)}"><span class="ntitle">${esc(n.title || '')}</span><small>${shortDate(n)}</small></button>
         <div class="nitem-prev" data-notes-toggle="${esc(key)}">
           ${(n.text || '').trim() ? `<p class="np-text">${esc(n.text)}</p>` : ''}
@@ -684,6 +691,8 @@
       ${list.length ? `<div class="nlist">${list.map(item).join('')}</div>` : '<p class="empty">No notes here yet.</p>'}</div>`;
     const host = $('#notesBody');
     drawPreviews(host);
+    const nl = $('.nlist', host);
+    if (nl) dragSort(nl, '.nitem:not(.editing)', ids => { f.order = ids; saveFolders(); });
     host.onclick = async e => {
       if (e.target.closest('[data-fmenu]')) return folderMenu(f);
       if (e.target.closest('[data-act="newnote"]')) {
@@ -719,11 +728,88 @@
       { key: 'page:' + (n ? n.id : 'new-' + f.id), title: true, canDelete: true, full: back });
   }
 
-  // ••• on a folder: rename, layout, order, delete.
+  /* Hold-and-drag to reorder (folders, notes). Hold ~half a second and the item lifts;
+     a quick swipe still scrolls and a quick tap still opens. Near the top/bottom edge the
+     page scrolls along. onDrop gets the data-ids in their new order. */
+  function dragSort(list, sel, onDrop) {
+    const HOLD = 450, SLOP = 8;
+    let item = null, timer = null, startX = 0, startY = 0, lastY = 0, base = 0, lifted = false, raf = 0, eatClick = false;
+    const items = () => $$(':scope > ' + sel, list);
+    const pageY = y => y + window.scrollY;
+    function lift() {
+      lifted = true; item.classList.add('dragging'); list.classList.add('sorting');
+      base = pageY(startY); navigator.vibrate?.(10);
+      const loop = () => {
+        const edge = lastY < 90 ? -10 : lastY > innerHeight - 110 ? 10 : 0;
+        if (edge) { window.scrollBy(0, edge); follow(lastY); }
+        raf = requestAnimationFrame(loop);
+      };
+      raf = requestAnimationFrame(loop);
+    }
+    function follow(y) {
+      lastY = y;
+      item.style.transform = `translateY(${pageY(y) - base}px)`;
+      const r = item.getBoundingClientRect(), mid = r.top + r.height / 2;
+      for (const sib of items()) {
+        if (sib === item) continue;
+        const sr = sib.getBoundingClientRect(), smid = sr.top + sr.height / 2;
+        const before = sib.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING;  // sib is above item
+        if ((before && mid < smid) || (!before && mid > smid)) {
+          const was = item.offsetTop, sibWas = sib.getBoundingClientRect().top;
+          before ? list.insertBefore(item, sib) : list.insertBefore(item, sib.nextSibling);
+          base += item.offsetTop - was;
+          item.style.transform = `translateY(${pageY(y) - base}px)`;
+          // slide the one that moved aside
+          const d = sibWas - sib.getBoundingClientRect().top;
+          sib.animate([{ transform: `translateY(${d}px)` }, { transform: 'none' }], { duration: 160, easing: 'ease-out' });
+          break;
+        }
+      }
+    }
+    function end(cancelled) {
+      clearTimeout(timer); timer = null;
+      if (!item) return;
+      cancelAnimationFrame(raf);
+      if (lifted) {
+        item.classList.remove('dragging'); list.classList.remove('sorting'); item.style.transform = '';
+        eatClick = true; setTimeout(() => { eatClick = false; }, 400);
+        if (!cancelled) onDrop(items().map(el => el.dataset.id));
+      }
+      item = null; lifted = false;
+    }
+    const start = (e, x, y) => {
+      const it = e.target.closest(sel);
+      if (!it || it.parentElement !== list || e.target.closest('.notes-area, input, textarea, select')) return;
+      item = it; startX = x; startY = lastY = y; lifted = false;
+      timer = setTimeout(lift, HOLD);
+    };
+    const move = (e, x, y) => {
+      if (!item) return;
+      if (!lifted) { if (Math.hypot(x - startX, y - startY) > SLOP) end(true); return; }
+      e.preventDefault(); follow(y);
+    };
+    // Touch (iPhone/iPad): touchmove must be non-passive so a lifted item stops the page scrolling.
+    list.addEventListener('touchstart', e => e.touches.length === 1 && start(e, e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+    list.addEventListener('touchmove', e => move(e, e.touches[0].clientX, e.touches[0].clientY), { passive: false });
+    list.addEventListener('touchend', () => end(false));
+    list.addEventListener('touchcancel', () => end(true));
+    // Mouse (laptop)
+    const mm = e => move(e, e.clientX, e.clientY);
+    const mu = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); end(false); };
+    list.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      start(e, e.clientX, e.clientY);
+      if (item) { window.addEventListener('mousemove', mm); window.addEventListener('mouseup', mu); }
+    });
+    list.addEventListener('contextmenu', e => { if (item) e.preventDefault(); });
+    list.addEventListener('click', e => { if (eatClick) { e.preventDefault(); e.stopPropagation(); eatClick = false; } }, true);
+    list.addEventListener('dragstart', e => e.preventDefault());  // no native link/image drag
+  }
+
+  // ••• on a folder: rename, layout, delete.
   function folderMenu(f) {
-    const i = folders.indexOf(f), count = inFolder(f.id).length;
+    const count = inFolder(f.id).length;
     const again = () => renderNotesPage(...notesArgs);
-    const move = d => { folders.splice(i, 1); folders.splice(i + d, 0, f); saveFolders(); toast(d < 0 ? 'Moved up' : 'Moved down'); };
     sheet(f.name, [
       ['Rename', async () => { const v = await promptText('Rename folder', f.name, 'Save'); if (v) { f.name = v; saveFolders(); again(); } }],
       f.layout === 'page'
@@ -732,8 +818,6 @@
             if (count > 1 && !(await ask('Show as one page?', `This folder has ${count} notes. One page shows the newest one. The others stay saved and come back if you switch to a list.`, 'One page', 'primary'))) return;
             f.layout = 'page'; saveFolders(); closeEditor(); again();
           }],
-      i > 0 && ['Move up', () => move(-1)],
-      i < folders.length - 1 && ['Move down', () => move(1)],
       f.id !== 'general' && ['Delete folder', async () => {
         if (!(await ask(`Delete “${f.name}”?`, count ? `Its ${count} note${count === 1 ? '' : 's'} will move to General.` : 'It has no notes.', 'Delete'))) return;
         closeEditor();
