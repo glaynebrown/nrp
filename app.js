@@ -2550,7 +2550,7 @@
         <div class="steps-row"><span>Step colors</span><div class="seg">${[['match', 'Matching (sage)'], ['phase', 'By phase']].map(([k, l]) => `<button data-steps="${k}" class="${theme.steps === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
         <div class="tokens">${TOKENS.filter(([k]) => theme.steps === 'phase' || !k.startsWith('st-')).map(([k, label]) => `<label class="tok"><input type="color" value="${c[k]}" data-tok="${k}"><span>${esc(tokenLabel(k, label))}</span>${theme.custom[theme.look]?.[k] ? `<button class="link" data-reset="${k}">reset</button>` : ''}</label>`).join('')}</div>
         <button class="btn ghost small" data-resetall ${Object.keys(theme.custom[theme.look] || {}).length ? '' : 'disabled'}>Reset “${esc(LOOKS[theme.look].name)}” colors</button>
-        <div class="ink-reset"><span>Pen + highlighter colors</span><button class="link" data-inkreset ${inkPalette ? '' : 'disabled'}>Reset to original</button></div>
+        <div class="ink-reset"><span>Pen + highlighter colors and sizes</span><button class="link" data-inkreset ${inkPalette ? '' : 'disabled'}>Reset to original</button></div>
       </section>
       <section class="panel">
         <h2><span class="pill">Fonts</span></h2>
@@ -2588,7 +2588,7 @@
       i.oninput = pick; i.onchange = pick;
     });
     $$('[data-reset]').forEach(b => b.onclick = resetTok);
-    $('[data-inkreset]').onclick = () => { inkPalette = null; local.set('inkPalette', null); Store.savePrefs({ inkPalette: null }).catch(() => {}); toast('Pen + highlighter colors reset'); renderSettings(); };
+    $('[data-inkreset]').onclick = () => { inkPalette = null; local.set('inkPalette', null); Store.savePrefs({ inkPalette: null }).catch(() => {}); toast("Pen + highlighter colors and sizes reset"); renderSettings(); };
     $('[data-resetall]').onclick = () => { theme.custom[theme.look] = {}; saveTheme(); renderSettings(); };
     $('[data-export]').onclick = () => {
       const blob = new Blob([JSON.stringify({ app: 'NRP', exported: new Date().toISOString(), notes }, null, 1)], { type: 'application/json' });

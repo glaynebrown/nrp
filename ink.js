@@ -31,34 +31,81 @@ const Ink = (() => {
   /* The iPad browser gives fewer Pencil points than a native app, so fast curves arrive as
      short straight pieces. Fill in between the points along a smooth curve (Catmull-Rom),
      and even out the pressure so the width doesn't flicker. */
+  /* Safari reports Pencil positions rounded to whole screen pixels, so a gentle slope
+     arrives as a tiny staircase. First drop the points that only exist because of that
+     rounding (any wobble smaller than about a pixel), keeping the real bends of your
+     letters; then draw a smooth curve through what's left. q = one screen pixel in page
+     units when the line was drawn (saved on each stroke). */
+  function simplify(pts, eps) {
+    if (pts.length < 3) return pts;
+    const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+    const stack = [[0, pts.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop(); if (b - a < 2) continue;
+      const [ax, ay] = pts[a], [bx, by] = pts[b], dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1e-6;
+      let far = -1, fd = eps;
+      for (let i = a + 1; i < b; i++) {
+        const d = Math.abs(dy * (pts[i][0] - ax) - dx * (pts[i][1] - ay)) / len;
+        if (d > fd) { fd = d; far = i; }
+      }
+      if (far > 0) { keep[far] = 1; stack.push([a, far], [far, b]); }
+    }
+    return pts.filter((_, i) => keep[i]);
+  }
+  function prepare(pts, q) {
+    if (pts.length < 3) return pts;
+    // pressure: average over ±4 neighbors (before thinning out the points)
+    const sm = pts.map((p, i) => { let t = 0, n = 0;
+      for (let j = Math.max(0, i - 4); j <= Math.min(pts.length - 1, i + 4); j++) { t += pts[j][2]; n++; }
+      return [p[0], p[1], t / n]; });
+    return densify(simplify(sm, Math.max(0.5, 0.8 * (q || 1))));
+  }
   function densify(pts) {
     if (pts.length < 3) return pts;
-    // pressure: average over ±4 neighbors
-    const pr = pts.map((_, i) => { let t = 0, n = 0;
-      for (let j = Math.max(0, i - 4); j <= Math.min(pts.length - 1, i + 4); j++) { t += pts[j][2]; n++; }
-      return t / n; });
+    const pr = pts.map(p => p[2]);
+    // Centripetal Catmull-Rom (alpha 0.5): unlike the plain kind, it never overshoots
+    // when the Pencil points arrive unevenly spaced (that made little wiggles).
     const out = [];
+    const d = (a, b) => Math.max(1e-4, Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])));
     for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+      const p1 = pts[i], p2 = pts[i + 1];
+      const p0 = pts[i - 1] || [2 * p1[0] - p2[0], 2 * p1[1] - p2[1]];
+      const p3 = pts[i + 2] || [2 * p2[0] - p1[0], 2 * p2[1] - p1[1]];
+      const t0 = 0, t1 = t0 + d(p0, p1), t2 = t1 + d(p1, p2), t3 = t2 + d(p2, p3);
       const steps = Math.max(1, Math.min(24, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 1.2)));
       for (let k = 0; k < steps; k++) {
-        const t = k / steps, t2 = t * t, t3 = t2 * t;
-        const cr = (a, b, c, d) => 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (3 * b - a - 3 * c + d) * t3);
-        out.push([cr(p0[0], p1[0], p2[0], p3[0]), cr(p0[1], p1[1], p2[1], p3[1]), pr[i] + (pr[i + 1] - pr[i]) * t]);
+        const t = t1 + (t2 - t1) * k / steps;
+        const lerp = (a, b, ta, tb) => [((tb - t) * a[0] + (t - ta) * b[0]) / (tb - ta), ((tb - t) * a[1] + (t - ta) * b[1]) / (tb - ta)];
+        const A1 = lerp(p0, p1, t0, t1), A2 = lerp(p1, p2, t1, t2), A3 = lerp(p2, p3, t2, t3);
+        const B1 = lerp(A1, A2, t0, t2), B2 = lerp(A2, A3, t1, t3);
+        const C = lerp(B1, B2, t1, t2);
+        out.push([C[0], C[1], pr[i] + (pr[i + 1] - pr[i]) * k / steps]);
       }
     }
     const last = pts[pts.length - 1];
     out.push([last[0], last[1], pr[pr.length - 1]]);
-    return out;
+    return evenOut(out, 3);
+  }
+  // Finished-line cleanup: a gentle moving average along the line (about ±5 page units)
+  // irons out small bumps but keeps the shape of letters. The ends stay where you put them.
+  function evenOut(pts, k = 4) {
+    if (pts.length < 5) return pts;
+    return pts.map((p, i) => {
+      const r = Math.min(k, i, pts.length - 1 - i);
+      if (!r) return p;
+      let x = 0, y = 0, wsum = 0;
+      for (let j = -r; j <= r; j++) { const w = r + 1 - Math.abs(j); x += pts[i + j][0] * w; y += pts[i + j][1] * w; wsum += w; }
+      return [x / wsum, y / wsum, p[2]];
+    });
   }
 
   function paint(ctx, s, pts, done = true) {
     if (!pts.length) return;
     const hl = s.k === 'hl';
     const real = !s.e && pts.some(p => Math.abs(p[2] - pts[0][2]) > 0.05);  // s.e = drawn with "Even line"
-    const outline = getStroke(densify(pts).map(p => [p[0], p[1], p[2] / 9]), hl
-      ? { size: s.w * 4.5, thinning: 0, smoothing: 0.6, streamline: 0.35, simulatePressure: false, last: done }
-      : { size: s.w * 1.1, thinning: real ? 0.22 : 0, smoothing: 0.6, streamline: 0.35, simulatePressure: false, last: done,
+    const outline = getStroke(prepare(pts, s.q).map(p => [p[0], p[1], p[2] / 9]), hl
+      ? { size: s.w * 4.5, thinning: 0, smoothing: 0.6, streamline: 0.2, simulatePressure: false, last: done }
+      : { size: s.w * 1.1, thinning: real ? 0.22 : 0, smoothing: 0.6, streamline: 0.2, simulatePressure: false, last: done,
           start: { taper: 0, cap: true }, end: { taper: 0, cap: true } });
     if (!outline.length) return;
     ctx.save();
@@ -79,7 +126,9 @@ const Ink = (() => {
     let data = strokes.map(s => ({ ...s }));
     let height = h;
     const pal = { pen: [...((palette && palette.pen) || DEFAULT_PALETTE.pen)], hl: [...((palette && palette.hl) || DEFAULT_PALETTE.hl)] };
-    let tool = 'pen', size = 'med', fingerDraws = false;
+    let tool = 'pen', fingerDraws = false;
+    // Pen and highlighter each remember their own size.
+    const sizes = { pen: 'med', hl: 'med', ...((palette && palette.size) || {}) };
     let even = false; try { even = localStorage.getItem('nrp-inkEven') === '1'; } catch {}
     const pick = { pen: 0, hl: 0 };  // which preset is chosen, per tool
     const set = () => tool === 'hl' ? 'hl' : 'pen';
@@ -101,6 +150,7 @@ const Ink = (() => {
           <button data-act="redo" title="Redo">${icon('redo')}</button>
         </div>
         <div class="ink-opts">
+          <small class="ink-rate" data-rate title="Pencil points per second (test)"></small>
           <label class="finger"><input type="checkbox" data-act="even" ${even ? 'checked' : ''}> Even line</label>
           <label class="finger"><input type="checkbox" data-act="finger"> Finger draws</label>
         </div>
@@ -126,7 +176,7 @@ const Ink = (() => {
         b.classList.toggle('on', tool !== 'erase' && +b.dataset.color === pick[set()]);
         b.classList.toggle('hl', set() === 'hl');
       });
-      host.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', b.dataset.size === size));
+      host.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', tool !== 'erase' && b.dataset.size === sizes[set()]));
       host.querySelector('[data-act=undo]').disabled = !undo.length;
       host.querySelector('[data-act=redo]').disabled = !redo.length;
       canvas.style.touchAction = fingerDraws ? 'none' : 'pan-y';
@@ -194,14 +244,19 @@ const Ink = (() => {
       before = snapshot();
       const p = pos(e);
       if (tool === 'erase') { live = { erase: true, hit: eraseAt(p) }; return; }
-      live = { c: color(), w: SIZES[size], k: tool === 'hl' ? 'hl' : 'pen', ...(even ? { e: 1 } : {}) };
+      rate = e.pointerType === 'pen' ? { n: 0, moves: 0, co: false, t0: e.timeStamp, last: e.timeStamp } : null;
+      live = { q: Math.round(100 / scale) / 100, c: color(), w: SIZES[sizes[set()]], k: tool === 'hl' ? 'hl' : 'pen', ...(even ? { e: 1 } : {}) };
       livePred = [];
       livePts = [ease(p)];
     });
+    // TEMPORARY test readout: how many Pencil points per second Safari hands over.
+    let rate = null;
     canvas.addEventListener('pointermove', e => {
       if (!live) return;
       const co = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
       const events = co.length ? co : [e];
+      if (rate && e.pointerType === 'pen') { rate.n += events.length; rate.moves++; rate.co ||= co.length > 1; rate.last = e.timeStamp;
+        rate.frac ||= events.some(ev => ev.clientX % 1 || ev.clientY % 1); }
       for (const ev of events) {
         const p = pos(ev);
         if (live.erase) { live.hit = eraseAt(p) || live.hit; continue; }
@@ -218,6 +273,11 @@ const Ink = (() => {
     const end = e => {
       if (!live) return;
       if (frame) { cancelAnimationFrame(frame); frame = 0; }
+      if (rate && rate.last - rate.t0 > 150) {
+        const secs = (rate.last - rate.t0) / 1000;
+        host.querySelector('[data-rate]').textContent = `${Math.round(rate.n / secs)} pts/s · ${Math.round(rate.moves / secs)} moves/s · ${rate.co ? 'extra ✓' : 'extra ✗'} · ${rate.frac ? 'exact' : 'whole px'}`;
+      }
+      rate = null;
       if (live.erase) { if (live.hit) commit(before); }
       else {
         // Finish exactly where the Pencil lifted (smoothing trails a hair behind).
@@ -252,7 +312,10 @@ const Ink = (() => {
         }
         pick[set()] = i;
       }
-      if (b.dataset.size) { size = b.dataset.size; if (tool === 'erase') tool = 'pen'; }
+      if (b.dataset.size) {
+        if (tool === 'erase') tool = 'pen';
+        sizes[set()] = b.dataset.size; savePal();
+      }
       const act = b.dataset.act;
       if (act === 'undo' && undo.length) { redo.push(snapshot()); const s = undo.pop(); data = s.data; height = s.height; resize(); changed(); return; }
       if (act === 'redo' && redo.length) { undo.push(snapshot()); const s = redo.pop(); data = s.data; height = s.height; resize(); changed(); return; }
@@ -262,11 +325,12 @@ const Ink = (() => {
     });
     host.querySelector('[data-act=finger]').addEventListener('change', e => { fingerDraws = e.target.checked; syncBar(); });
     host.querySelector('[data-act=even]').addEventListener('change', e => { even = e.target.checked; try { localStorage.setItem('nrp-inkEven', even ? '1' : '0'); } catch {} });
+    function savePal() { onPalette && onPalette({ pen: [...pal.pen], hl: [...pal.hl], size: { ...sizes } }); }
     const picker = host.querySelector('[data-picker]');
     const picked = () => {
       const k = picker.dataset.set, i = +picker.dataset.i; if (!k) return;
       pal[k][i] = picker.value; syncBar();
-      onPalette && onPalette({ pen: [...pal.pen], hl: [...pal.hl] });
+      savePal();
     };
     picker.addEventListener('input', picked); picker.addEventListener('change', picked);
 
