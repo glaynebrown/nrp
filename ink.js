@@ -28,13 +28,37 @@ const Ink = (() => {
 
   // One stroke = one smooth outline shape. Pressure (0–9 saved) thickens it gently;
   // strokes with no real pressure (finger, mouse) stay an even width.
+  /* The iPad browser gives fewer Pencil points than a native app, so fast curves arrive as
+     short straight pieces. Fill in between the points along a smooth curve (Catmull-Rom),
+     and even out the pressure so the width doesn't flicker. */
+  function densify(pts) {
+    if (pts.length < 3) return pts;
+    // pressure: average over ±4 neighbors
+    const pr = pts.map((_, i) => { let t = 0, n = 0;
+      for (let j = Math.max(0, i - 4); j <= Math.min(pts.length - 1, i + 4); j++) { t += pts[j][2]; n++; }
+      return t / n; });
+    const out = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+      const steps = Math.max(1, Math.min(24, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 1.2)));
+      for (let k = 0; k < steps; k++) {
+        const t = k / steps, t2 = t * t, t3 = t2 * t;
+        const cr = (a, b, c, d) => 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (3 * b - a - 3 * c + d) * t3);
+        out.push([cr(p0[0], p1[0], p2[0], p3[0]), cr(p0[1], p1[1], p2[1], p3[1]), pr[i] + (pr[i + 1] - pr[i]) * t]);
+      }
+    }
+    const last = pts[pts.length - 1];
+    out.push([last[0], last[1], pr[pr.length - 1]]);
+    return out;
+  }
+
   function paint(ctx, s, pts, done = true) {
     if (!pts.length) return;
     const hl = s.k === 'hl';
-    const real = pts.some(p => Math.abs(p[2] - pts[0][2]) > 0.05);
-    const outline = getStroke(pts.map(p => [p[0], p[1], p[2] / 9]), hl
-      ? { size: s.w * 4.5, thinning: 0, smoothing: 0.7, streamline: 0.65, simulatePressure: false, last: done }
-      : { size: s.w * 1.1, thinning: real ? 0.45 : 0, smoothing: 0.7, streamline: 0.65, simulatePressure: false, last: done,
+    const real = !s.e && pts.some(p => Math.abs(p[2] - pts[0][2]) > 0.05);  // s.e = drawn with "Even line"
+    const outline = getStroke(densify(pts).map(p => [p[0], p[1], p[2] / 9]), hl
+      ? { size: s.w * 4.5, thinning: 0, smoothing: 0.6, streamline: 0.35, simulatePressure: false, last: done }
+      : { size: s.w * 1.1, thinning: real ? 0.22 : 0, smoothing: 0.6, streamline: 0.35, simulatePressure: false, last: done,
           start: { taper: 0, cap: true }, end: { taper: 0, cap: true } });
     if (!outline.length) return;
     ctx.save();
@@ -56,6 +80,7 @@ const Ink = (() => {
     let height = h;
     const pal = { pen: [...((palette && palette.pen) || DEFAULT_PALETTE.pen)], hl: [...((palette && palette.hl) || DEFAULT_PALETTE.hl)] };
     let tool = 'pen', size = 'med', fingerDraws = false;
+    let even = false; try { even = localStorage.getItem('nrp-inkEven') === '1'; } catch {}
     const pick = { pen: 0, hl: 0 };  // which preset is chosen, per tool
     const set = () => tool === 'hl' ? 'hl' : 'pen';
     const color = () => pal[set()][pick[set()]];
@@ -75,7 +100,10 @@ const Ink = (() => {
           <button data-act="undo" title="Undo">${icon('undo')}</button>
           <button data-act="redo" title="Redo">${icon('redo')}</button>
         </div>
-        <label class="finger"><input type="checkbox" data-act="finger"> Finger draws</label>
+        <div class="ink-opts">
+          <label class="finger"><input type="checkbox" data-act="even" ${even ? 'checked' : ''}> Even line</label>
+          <label class="finger"><input type="checkbox" data-act="finger"> Finger draws</label>
+        </div>
       </div>
       <div class="ink-page"><canvas></canvas></div>
       <div class="ink-foot">
@@ -136,7 +164,7 @@ const Ink = (() => {
     const snapshot = () => ({ data: data.slice(), height });
 
     // ---- Pointer input ----
-    let live = null, livePts = null, penSeen = false, before = null, frame = 0;
+    let live = null, livePts = null, livePred = [], penSeen = false, before = null, frame = 0;
     // Exact position (1 decimal) + pressure 0–9 (1 decimal). Fingers and the mouse
     // have no real pressure, so they draw an even line.
     const r1 = n => Math.round(n * 10) / 10;
@@ -147,7 +175,8 @@ const Ink = (() => {
     };
     // Smoothing happens when the line is drawn (perfect-freehand), so points are kept exactly.
     const ease = p => p.map(r1);
-    const paintLive = () => { frame = 0; if (live && !live.erase) { showBase(); paint(ctx, live, livePts, false); } };
+    // While drawing, also show where the Pencil is heading (predicted points) so the line keeps up with the tip.
+    const paintLive = () => { frame = 0; if (live && !live.erase) { showBase(); paint(ctx, live, livePts.concat(livePred), false); } };
     const allowed = e => e.pointerType === 'pen' || e.pointerType === 'mouse' || (e.pointerType === 'touch' && fingerDraws && !penSeen);
 
     function eraseAt(p) {
@@ -165,7 +194,8 @@ const Ink = (() => {
       before = snapshot();
       const p = pos(e);
       if (tool === 'erase') { live = { erase: true, hit: eraseAt(p) }; return; }
-      live = { c: color(), w: SIZES[size], k: tool === 'hl' ? 'hl' : 'pen' };
+      live = { c: color(), w: SIZES[size], k: tool === 'hl' ? 'hl' : 'pen', ...(even ? { e: 1 } : {}) };
+      livePred = [];
       livePts = [ease(p)];
     });
     canvas.addEventListener('pointermove', e => {
@@ -179,7 +209,11 @@ const Ink = (() => {
         if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 0.4) continue;
         livePts.push(q);
       }
-      if (!live.erase && !frame) frame = requestAnimationFrame(paintLive);
+      if (!live.erase) {
+        const last = livePts[livePts.length - 1];
+        livePred = (e.getPredictedEvents ? e.getPredictedEvents() : []).slice(0, 3).map(ev => { const q = ease(pos(ev)); q[2] = last[2]; return q; });
+        if (!frame) frame = requestAnimationFrame(paintLive);
+      }
     });
     const end = e => {
       if (!live) return;
@@ -191,7 +225,7 @@ const Ink = (() => {
           if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= 0.4) livePts.push([r1(p[0]), r1(p[1]), last[2]]); }
         data.push({ ...live, p: encode(livePts) }); redraw(); commit(before);
       }
-      live = null; livePts = null;
+      live = null; livePts = null; livePred = [];
     };
     canvas.addEventListener('pointerup', end);
     canvas.addEventListener('pointercancel', end);
@@ -227,6 +261,7 @@ const Ink = (() => {
       syncBar();
     });
     host.querySelector('[data-act=finger]').addEventListener('change', e => { fingerDraws = e.target.checked; syncBar(); });
+    host.querySelector('[data-act=even]').addEventListener('change', e => { even = e.target.checked; try { localStorage.setItem('nrp-inkEven', even ? '1' : '0'); } catch {} });
     const picker = host.querySelector('[data-picker]');
     const picked = () => {
       const k = picker.dataset.set, i = +picker.dataset.i; if (!k) return;
