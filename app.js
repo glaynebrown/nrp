@@ -53,6 +53,8 @@
     meds: svg('<path d="M18 2l4 4M20 4l-9.5 9.5M14 6l4 4M7 13l4 4M5.5 18.5L2 22M9.5 9.5l5 5-4.5 4.5a2.1 2.1 0 01-3 0l-2-2a2.1 2.1 0 010-3z"/>'),
     tips: svg('<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0012 3z"/>'),
     notes: svg('<path d="M4 20l1-5L16 4l4 4L9 19l-5 1z"/><path d="M14 6l4 4"/>'),
+    expand: svg('<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>'),
+    folder: svg('<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>'),
     notebook: svg('<path d="M6 3h12a1 1 0 011 1v16a1 1 0 01-1 1H6a2 2 0 01-2-2V5a2 2 0 012-2z"/><path d="M8 3v18M11.5 8H16M11.5 12H16"/>'),
     settings: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>'),
     edit: svg('<path d="M12 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.4 2.6a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/>'),
@@ -198,12 +200,14 @@
   // Top corners: Notes (notebook) and Settings (gear); on bigger screens both sit at the right.
   const TABS = [['tips', 'Tips'], ['flow', 'Algorithm'], ['meds', 'Med math']];
   window.addEventListener('hashchange', render);
-  let editor = null, curTab = 'flow', backHash = '#/flow';
+  let editor = null, curTab = 'flow', backHash = '#/flow', notesArgs = [];
   function render() {
-    let [, tab = 'flow', arg] = (location.hash || '#/flow').split('/');
+    let [, tab = 'flow', arg, arg2] = (location.hash || '#/flow').split('/');
     if (tab === 'airway') tab = 'tips';
-    if (tab === 'page') tab = 'notes';
+    if (tab === 'page') { tab = 'notes'; arg = arg2 = undefined; }
     closeEditor();
+    document.body.classList.remove('fullpage');
+    notesArgs = [arg, arg2];
     curTab = tab;
     if (tab !== 'notes') backHash = location.hash || '#/flow';
     $$('#tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
@@ -211,7 +215,7 @@
     $('#notesBtn').classList.toggle('on', tab === 'notes');
     stopAnimations();
     window.scrollTo({ top: 0 });
-    ({ flow: renderFlow, meds: renderMeds, tips: renderTips, settings: renderSettings, notes: renderNotesPage }[tab] || renderFlow)();
+    ({ flow: renderFlow, meds: renderMeds, tips: renderTips, settings: renderSettings, notes: () => renderNotesPage(arg, arg2) }[tab] || renderFlow)();
   }
   $('#tabs').innerHTML = TABS.map(([k, l]) => `<a href="#/${k}" data-tab="${k}" class="${k === 'flow' ? 'home' : ''}">${icons[k]}<span>${l}</span></a>`).join('');
   $('#gear').innerHTML = icons.settings;
@@ -302,7 +306,7 @@
   }
   // Notes changed on another device (or just saved): redraw without jumping to the top.
   function refreshFlow() {
-    if (curTab === 'notes') { if (!editor && $('#notesBody')) renderNotesMode($('#notesBody')); return; }
+    if (curTab === 'notes') { if (!editor && !$('[data-search]:focus')) renderNotesPage(...notesArgs); return; }
     const body = $('#flowBody');
     if (!body || editor || flowMode === 'run') return;
     if (editMode) return;  // don't wipe what you're typing
@@ -598,21 +602,74 @@
     mountEditor(area, n || { title: cardTitle(key), text: '', cardId: key, strokes: [], h: 900 }, { key, title: key.startsWith('page:'), canDelete: curTab === 'notes' });
   }
 
-  // ---- Notes page (notebook icon): every step note (in algorithm order) + extra notes ----
-  function renderNotesPage() {
-    view.innerHTML = '<div id="notesBody"></div>';
-    renderNotesMode($('#notesBody'));
+  // ---- Notes page (notebook icon): your own notes, in folders like iPhone Notes ----
+  // Step notes (the ✎ on each card) stay on the algorithm; this page is only your own memory work.
+  // Folders: [{id, name, icon, layout: 'list' | 'page'}] in your order, saved to your account.
+  // The step folders are just a starting set: rename, reorder or delete them like any other.
+  const STARTER_FOLDERS = [['f-prep', 'Prep', 'clipboard'], ['f-golden', 'Golden minute', 'stopwatch'], ['f-ppv', 'PPV', 'lungs'],
+    ['f-cpr', 'CPR', 'heart'], ['f-vol', 'Hypovolemia or PTX', 'drop'], ['f-debrief', 'Debrief', 'chat'], ['general', 'General', '']]
+    .map(([id, name, icon]) => ({ id, name, icon, layout: 'list' }));
+  let folders = local.get('folders', null) || copy(STARTER_FOLDERS);
+  const keepGeneral = () => { if (!folders.some(f => f.id === 'general')) folders.push({ id: 'general', name: 'General', icon: '', layout: 'list' }); };
+  keepGeneral();
+  function saveFolders() { keepGeneral(); local.set('folders', folders); Store.savePrefs({ folders: copy(folders) }).catch(() => {}); }
+  let noteSearch = '';
+  const ownNotes = () => notes.filter(n => !n.cardId || (!CARD[n.cardId] && hasContent(n)));
+  const folderOf = n => folders.some(f => f.id === n.folder) ? n.folder : 'general';
+  const inFolder = fid => ownNotes().filter(n => folderOf(n) === fid).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  const folderIcon = f => { const i = STEP_ICONS.find(([k]) => k === f.icon); return `<span class="ficon">${i ? svg(i[2]) : icons.folder}</span>`; };
+  const shortDate = n => new Date(n.updated || 0).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const signinBanner = () => !Store.configured ? '<p class="banner">Sample mode: notes are saved on this device only.</p>'
+    : !user ? `<p class="banner">Sign in from <a href="#/settings">Settings</a> to keep notes.</p>` : '';
+
+  function renderNotesPage(fid, nid) {
+    const f = fid && folders.find(x => x.id === fid);
+    if (!f) return renderFolders();
+    if (nid || f.layout === 'page') return renderFullNote(f, nid);
+    renderFolder(f);
   }
-  function renderNotesMode(host) {
-    const stepNotes = NRP.cards.map(c => noteFor(c.id)).filter(hasContent);
-    const extra = notes.filter(n => !n.cardId || (!CARD[n.cardId] && hasContent(n))).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+
+  // Folder list + search
+  function renderFolders() {
+    view.innerHTML = `<div id="notesBody">
+      <div class="notes-top"><span class="pill">Notes</span></div>
+      ${signinBanner()}
+      <input class="search" type="search" placeholder="Search notes" data-search value="${esc(noteSearch)}" autocomplete="off">
+      <div data-results></div>
+      <div data-folderlist>
+        <div class="folders">${folders.map(f => `<a class="folder" href="#/notes/${esc(f.id)}">${folderIcon(f)}<span class="fname">${esc(f.name)}</span>${f.layout === 'page' ? '<small class="fkind">One page</small>' : ''}<span class="fcount">${inFolder(f.id).length}</span><span class="chev-r"></span></a>`).join('')}</div>
+        <button class="btn ghost small" data-newfolder>+ New folder</button>
+      </div></div>`;
+    const host = $('#notesBody'), box = $('[data-search]', host);
+    const search = () => {
+      noteSearch = box.value;
+      const q = noteSearch.trim().toLowerCase();
+      $('[data-folderlist]', host).hidden = !!q;
+      if (!q) return $('[data-results]', host).innerHTML = '';
+      const hits = ownNotes().filter(n => `${n.title || ''}\n${n.text || ''}`.toLowerCase().includes(q)).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+      $('[data-results]', host).innerHTML = hits.length ? `<div class="nlist">${hits.map(n => `
+        <a class="nitem sres" href="#/notes/${esc(folderOf(n))}/${esc(n.id)}">
+          <div class="nitem-head"><span class="ntitle">${esc(n.title || '')}</span><small>${esc(folders.find(f => f.id === folderOf(n)).name)} · ${shortDate(n)}</small></div>
+          ${(n.text || '').trim() ? `<p class="np-text clamp">${esc(n.text)}</p>` : ''}
+        </a>`).join('')}</div>` : '<p class="empty">No notes match.</p>';
+    };
+    box.oninput = search;
+    search();
+    $('[data-newfolder]', host).onclick = async () => {
+      const name = await promptText('New folder', '', 'Create'); if (!name) return;
+      const gi = folders.findIndex(f => f.id === 'general');
+      folders.splice(gi < 0 ? folders.length : gi, 0, { id: uid('f'), name, icon: '', layout: 'list' });
+      saveFolders(); renderFolders();
+    };
+  }
+
+  // One folder in "Notes" layout: a list of notes that open in place.
+  function renderFolder(f) {
+    const list = inFolder(f.id);
     const item = n => {
-      const key = keyFor(n), date = new Date(n.updated || 0).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      const label = n.cardId && CARD[n.cardId] ? `<span class="nlabel ph-${NRP.groups.find(g => g.cards.includes(n.cardId)).phase}">${stepLabel(n.cardId)}</span>` : '';
+      const key = 'page:' + n.id;
       return `<div class="nitem">
-        <button class="nitem-head" data-notes-toggle="${esc(key)}">
-          ${label}<span class="ntitle">${esc(n.cardId && CARD[n.cardId] ? cardTitle(n.cardId) : (n.title || ''))}</span><small>${date}</small>
-        </button>
+        <button class="nitem-head" data-notes-toggle="${esc(key)}"><span class="ntitle">${esc(n.title || '')}</span><small>${shortDate(n)}</small></button>
         <div class="nitem-prev" data-notes-toggle="${esc(key)}">
           ${(n.text || '').trim() ? `<p class="np-text">${esc(n.text)}</p>` : ''}
           ${(n.strokes || []).length ? `<canvas data-preview="${n.id}"></canvas>` : ''}
@@ -620,28 +677,75 @@
         <div class="notes-area" data-notes="${esc(key)}" hidden></div>
       </div>`;
     };
-    host.innerHTML = `
-      <div class="notes-top"><span class="pill">Notes</span><button class="btn primary small" data-act="newnote">+ New note</button></div>
-      ${!Store.configured ? '<p class="banner">Sample mode: notes are saved on this device only.</p>' : ''}
-      ${Store.configured && !user ? `<p class="banner">Sign in from <a href="#/settings">Settings</a> to keep notes.</p>` : ''}
-      ${extra.length ? `<div class="nlist">${extra.map(item).join('')}</div>` : ''}
-      <h3 class="nsec">From the algorithm</h3>
-      ${stepNotes.length ? `<div class="nlist">${stepNotes.map(item).join('')}</div>`
-        : '<p class="empty">Notes you write with the ✎ on any step in Reference show up here.</p>'}`;
+    view.innerHTML = `<div id="notesBody">
+      <div class="folder-top"><a class="back" href="#/notes">‹ Folders</a><button class="icon-btn" data-fmenu aria-label="Folder options" title="Folder options">•••</button></div>
+      <div class="notes-top"><span class="pill ftitle">${folderIcon(f)}${esc(f.name)}</span><button class="btn primary small" data-act="newnote">+ New note</button></div>
+      ${signinBanner()}
+      ${list.length ? `<div class="nlist">${list.map(item).join('')}</div>` : '<p class="empty">No notes here yet.</p>'}</div>`;
+    const host = $('#notesBody');
     drawPreviews(host);
     host.onclick = async e => {
+      if (e.target.closest('[data-fmenu]')) return folderMenu(f);
       if (e.target.closest('[data-act="newnote"]')) {
         if (Store.configured && !user) { location.hash = '#/settings'; return toast('Sign in first to keep notes'); }
         closeEditor();
-        const id = await Store.saveNote({ title: '', text: '', cardId: null, strokes: [], h: 1300 });
-        if (!notes.find(n => n.id === id)) notes = [...notes, { id, title: '', text: '', cardId: null, strokes: [], h: 1300, updated: Date.now() }];
-        renderNotesMode(host);
+        const blank = { title: '', text: '', cardId: null, folder: f.id, strokes: [], h: 1300 };
+        const id = await Store.saveNote(blank);
+        if (!notes.find(n => n.id === id)) notes = [...notes, { id, ...blank, updated: Date.now() }];
+        renderFolder(f);
         toggleNotes('page:' + id);
         return;
       }
       const t = e.target.closest('[data-notes-toggle]');
       if (t) toggleNotes(t.dataset.notesToggle);
     };
+  }
+
+  // A note on the whole screen (header + tabs hidden). "One page" folders always open like this.
+  function renderFullNote(f, nid) {
+    const isPage = f.layout === 'page' && !nid;
+    const n = nid ? notes.find(x => x.id === nid) : inFolder(f.id)[0];
+    if (nid && !n) { location.hash = '#/notes/' + f.id; return; }  // deleted on another device
+    const back = isPage ? '#/notes' : '#/notes/' + f.id;
+    document.body.classList.add('fullpage');
+    view.innerHTML = `<div id="notesBody">
+      <div class="folder-top"><a class="back" href="${back}">‹ ${isPage ? 'Folders' : esc(f.name)}</a>${isPage ? '<button class="icon-btn" data-fmenu aria-label="Folder options" title="Folder options">•••</button>' : ''}</div>
+      <div class="full-note" data-full></div></div>`;
+    if (isPage) $('[data-fmenu]').onclick = () => folderMenu(f);
+    const host = $('[data-full]');
+    if (Store.configured && !user) { host.innerHTML = `<p class="small signin-hint">Sign in from <a href="#/settings">Settings</a> to keep notes on all your devices.</p>`; return; }
+    // A new page is only saved once you write something.
+    mountEditor(host, n || { title: '', text: '', cardId: null, folder: f.id, strokes: [], h: 1300 },
+      { key: 'page:' + (n ? n.id : 'new-' + f.id), title: true, canDelete: true, full: back });
+  }
+
+  // ••• on a folder: rename, layout, order, delete.
+  function folderMenu(f) {
+    const i = folders.indexOf(f), count = inFolder(f.id).length;
+    const again = () => renderNotesPage(...notesArgs);
+    const move = d => { folders.splice(i, 1); folders.splice(i + d, 0, f); saveFolders(); toast(d < 0 ? 'Moved up' : 'Moved down'); };
+    sheet(f.name, [
+      ['Rename', async () => { const v = await promptText('Rename folder', f.name, 'Save'); if (v) { f.name = v; saveFolders(); again(); } }],
+      f.layout === 'page'
+        ? ['Show as a list of notes', () => { f.layout = 'list'; saveFolders(); location.hash = '#/notes/' + f.id; again(); }]
+        : ['Show as one page', async () => {
+            if (count > 1 && !(await ask('Show as one page?', `This folder has ${count} notes. One page shows the newest one. The others stay saved and come back if you switch to a list.`, 'One page', 'primary'))) return;
+            f.layout = 'page'; saveFolders(); closeEditor(); again();
+          }],
+      i > 0 && ['Move up', () => move(-1)],
+      i < folders.length - 1 && ['Move down', () => move(1)],
+      f.id !== 'general' && ['Delete folder', async () => {
+        if (!(await ask(`Delete “${f.name}”?`, count ? `Its ${count} note${count === 1 ? '' : 's'} will move to General.` : 'It has no notes.', 'Delete'))) return;
+        closeEditor();
+        for (const n of inFolder(f.id)) {
+          const { id, title = '', text = '', cardId = null, strokes = [], h = 1300 } = n;
+          n.folder = 'general';
+          await Store.saveNote({ id, title, text, cardId, folder: 'general', strokes, h }).catch(console.error);
+        }
+        folders = folders.filter(x => x !== f); saveFolders();
+        location.hash = '#/notes';
+      }, 'danger'],
+    ].filter(Boolean));
   }
 
   /* ---------- Run it (mock code with timers) ---------- */
@@ -2203,22 +2307,28 @@
 
   // Typing + Pencil area, opened inside a card or a Notes item.
   // A step's note is only created once you actually write something.
-  function mountEditor(host, n, { key, title, canDelete }) {
+  // full = the page to go back to when the note is on the whole screen.
+  function mountEditor(host, n, { key, title, canDelete, full }) {
+    const own = title;  // your own notes (not a step's ✎ note) have a title, a folder and full screen
     host.innerHTML = `
       <div class="editor">
         <div class="ed-top">
           ${title ? `<input class="title-in" placeholder="Title (optional)" value="${esc(n.title)}" data-title>` : ''}
           <span class="saved" data-saved>${n.id ? 'Saved' : ''}</span>
-          ${canDelete && n.id ? '<button class="link danger-text" data-del>Delete</button>' : ''}
+          ${own && !full && n.id ? `<button class="icon-btn" data-expand aria-label="Full screen" title="Full screen">${icons.expand}</button>` : ''}
           <button class="btn primary small" data-done>Done</button>
         </div>
         <textarea class="typed" placeholder="Type here, or write below with your Pencil…" data-text>${esc(n.text)}</textarea>
         <div class="ink" data-ink></div>
+        ${own ? `<div class="ed-foot">
+          <label class="fold-pick">Folder <select data-folder>${folders.map(f => `<option value="${esc(f.id)}" ${folderOf(n) === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>
+          ${canDelete && n.id ? '<button class="link danger-text" data-del>Delete</button>' : ''}
+        </div>` : ''}
       </div>`;
     const ta = $('[data-text]', host), saved = $('[data-saved]', host);
     const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(64, ta.scrollHeight + 2) + 'px'; };
     grow();
-    const ed = editor = { key, id: n.id || null, host, n: { title: n.title || '', text: n.text || '', cardId: n.cardId || null, strokes: n.strokes || [], h: n.h || 900 }, dirty: false, timer: null, chain: Promise.resolve() };
+    const ed = editor = { key, id: n.id || null, host, n: { title: n.title || '', text: n.text || '', cardId: n.cardId || null, folder: n.folder || null, strokes: n.strokes || [], h: n.h || 900 }, dirty: false, timer: null, chain: Promise.resolve() };
     ed.queue = () => { ed.dirty = true; saved.textContent = 'Saving…'; clearTimeout(ed.timer); ed.timer = setTimeout(() => flush(ed), 700); };
     ed.ink = Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, onChange: ({ strokes, h }) => { ed.n.strokes = strokes; ed.n.h = h; ed.queue(); } });
     ta.oninput = () => { ed.n.text = ta.value; grow(); ed.queue(); };
@@ -2226,13 +2336,18 @@
     if (ti) { ti.oninput = () => { ed.n.title = ti.value; ed.queue(); }; }
     // A brand-new note starts in the typing box (a title is optional).
     if (ti && !n.title && !n.text) setTimeout(() => ta.focus({ preventScroll: true }), 50);
-    $('[data-done]', host).onclick = () => closeEditor();
+    $('[data-done]', host).onclick = () => full ? (location.hash = full) : closeEditor();
+    const fs = $('[data-folder]', host);
+    if (fs) fs.onchange = () => { ed.n.folder = fs.value; ed.queue(); toast('Moved to ' + folders.find(f => f.id === fs.value).name); };
+    const ex = $('[data-expand]', host);
+    if (ex) ex.onclick = () => { location.hash = `#/notes/${folderOf(ed.n)}/${ed.id}`; };
     const del = $('[data-del]', host);
     if (del) del.onclick = async () => {
       if (!(await ask('Delete this note?', 'The typing and drawing will be gone for good.', 'Delete'))) return;
       editor = null; clearTimeout(ed.timer); ed.ink.destroy();
-      await ed.chain; await Store.deleteNote(ed.id);
-      notes = notes.filter(x => x.id !== ed.id); refreshFlow();
+      await ed.chain; if (ed.id) await Store.deleteNote(ed.id);
+      notes = notes.filter(x => x.id !== ed.id);
+      full ? (location.hash = full) : refreshFlow();
     };
   }
 
@@ -2245,7 +2360,7 @@
     if (JSON.stringify(n.strokes).length > 900000) { toast('This page is full. Start a new page for more drawing.'); return ed.chain; }
     ed.chain = ed.chain.then(async () => {
       try {
-        ed.id = await Store.saveNote({ id: ed.id || undefined, title: n.title, text: n.text, cardId: n.cardId, strokes: n.strokes, h: n.h });
+        ed.id = await Store.saveNote({ id: ed.id || undefined, title: n.title, text: n.text, cardId: n.cardId, folder: n.folder || null, strokes: n.strokes, h: n.h });
         const s = $('[data-saved]', ed.host); if (s && !ed.dirty) s.textContent = 'Saved';
       } catch (e) { console.error(e); toast('Couldn’t save. Check your connection.'); ed.dirty = true; }
     });
@@ -2350,7 +2465,7 @@
       if (Store.configured && !user) return toast('Sign in first');
       try {
         const data = JSON.parse(await file.text()); const list = data.notes || [];
-        for (const n of list) await Store.saveNote({ id: n.id, title: n.title || '', text: n.text || '', cardId: n.cardId || null, strokes: n.strokes || [], h: n.h || 1300 });
+        for (const n of list) await Store.saveNote({ id: n.id, title: n.title || '', text: n.text || '', cardId: n.cardId || null, folder: n.folder || null, strokes: n.strokes || [], h: n.h || 1300 });
         toast(`Imported ${list.length} note${list.length === 1 ? '' : 's'}`);
       } catch { toast('That file isn’t an NRP backup'); }
       e.target.value = '';
@@ -2379,15 +2494,43 @@
   }
 
   /* ================= Little dialog ================= */
-  function ask(title, body, okLabel) {
+  function ask(title, body, okLabel, okStyle = 'danger') {
     return new Promise(res => {
       const d = document.createElement('div'); d.className = 'dialog-wrap';
       d.innerHTML = `<div class="dialog" role="dialog" aria-modal="true"><h3>${esc(title)}</h3><p>${esc(body)}</p>
-        <div class="row-end"><button class="btn ghost" data-no>Cancel</button><button class="btn danger" data-yes>${esc(okLabel)}</button></div></div>`;
+        <div class="row-end"><button class="btn ghost" data-no>Cancel</button><button class="btn ${okStyle}" data-yes>${esc(okLabel)}</button></div></div>`;
       document.body.append(d);
       const done = v => { d.remove(); res(v); };
       d.onclick = e => { if (e.target === d || e.target.closest('[data-no]')) done(false); if (e.target.closest('[data-yes]')) done(true); };
     });
+  }
+
+  // Type a short name (folders).
+  function promptText(title, value, okLabel) {
+    return new Promise(res => {
+      const d = document.createElement('div'); d.className = 'dialog-wrap';
+      d.innerHTML = `<form class="dialog" role="dialog" aria-modal="true"><h3>${esc(title)}</h3>
+        <input class="name-in" data-v value="${esc(value)}" maxlength="40" placeholder="Name" autocomplete="off">
+        <div class="row-end"><button type="button" class="btn ghost" data-no>Cancel</button><button class="btn primary">${esc(okLabel)}</button></div></form>`;
+      document.body.append(d);
+      const inp = $('[data-v]', d); setTimeout(() => inp.focus(), 30);
+      const done = v => { d.remove(); res(v); };
+      d.onclick = e => { if (e.target === d || e.target.closest('[data-no]')) done(null); };
+      $('form', d).onsubmit = e => { e.preventDefault(); done(inp.value.trim() || null); };
+    });
+  }
+  // A list of choices (folder ••• menu): [label, action, 'danger'?]
+  function sheet(title, items) {
+    const d = document.createElement('div'); d.className = 'dialog-wrap';
+    d.innerHTML = `<div class="dialog sheet" role="dialog" aria-modal="true"><h3>${esc(title)}</h3>
+      ${items.map(([l, , cls], i) => `<button class="sheet-btn ${cls || ''}" data-i="${i}">${esc(l)}</button>`).join('')}
+      <button class="sheet-btn cancel" data-no>Cancel</button></div>`;
+    document.body.append(d);
+    d.onclick = e => {
+      const b = e.target.closest('[data-i]');
+      if (e.target === d || e.target.closest('[data-no]')) return d.remove();
+      if (b) { d.remove(); items[b.dataset.i][1](); }
+    };
   }
 
   Store.onUser(async u => {
@@ -2400,6 +2543,8 @@
       if (p && p.quiz) { Object.assign(quiz, p.quiz); local.set('quiz', quiz); }
       else if (Object.keys(quiz.missed).length) saveQuiz();
       else if (Object.keys(edits.cards).length + Object.keys(edits.groups).length + Object.keys(edits.meds).length || edits.layout) saveEdits();
+      if (p && p.folders) { folders = p.folders; keepGeneral(); local.set('folders', folders); }
+      else saveFolders();
       seedPrepNote(p).then(() => updatePrepWeights(p));
     }
     render();

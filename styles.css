@@ -312,10 +312,10 @@ li.big {
 .nitem.editing.own { padding-top: 12px; }
 .nlist > .nitem { min-width: 0; }  /* never wider than the screen */
 @media (max-width: 560px) {
-  .notes-area .ed-top { flex-wrap: wrap; row-gap: 6px; }
-  .notes-area .ed-top .title-in { flex-basis: 100%; }  /* title gets its own line; Saved · Delete · Done under it */
+  :is(.notes-area, .full-note) .ed-top { flex-wrap: wrap; row-gap: 6px; }
+  :is(.notes-area, .full-note) .ed-top .title-in { flex-basis: 100%; }  /* title gets its own line; Saved · Done under it */
 }
-.notes-area .title-in { flex: 1; min-width: 0; font-size: 24px; }
+:is(.notes-area, .full-note) .title-in { flex: 1; min-width: 0; font-size: 24px; }
 .signin-hint { margin: 4px; }
 @media (max-width: 560px) {
   .big-head { gap: 10px; padding: 14px 12px 14px 10px; }
@@ -713,3 +713,42 @@ li.big {
 
 /* Notes page header: title left, + New note right. */
 .notes-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+
+/* ---------- Notes folders ---------- */
+.search { width: 100%; border: 1.5px solid var(--line); border-radius: 14px; padding: 10px 14px; background: var(--card); margin-bottom: 14px; outline: none; -webkit-appearance: none; appearance: none; }
+.search:focus { border-color: var(--lav-ink); }
+.folders { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; margin-bottom: 12px; }
+.folder { display: flex; align-items: center; gap: 12px; padding: 14px 16px; text-decoration: none; color: var(--text); font-weight: 700; font-size: 17px; border-bottom: 1px solid var(--line); }
+.folder:last-child { border-bottom: 0; }
+.folder:active { background: var(--soft); }
+.ficon { display: grid; place-items: center; color: var(--title); flex: none; }
+.ficon svg { width: 22px; height: 22px; }
+.fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fkind { color: var(--muted); font-size: 12px; font-weight: 700; }
+.fcount { color: var(--muted); font-weight: 700; font-size: 15px; }
+.chev-r { width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); flex: none; margin-left: 2px; }
+.folder-top { display: flex; align-items: center; justify-content: space-between; min-height: 40px; margin-bottom: 6px; }
+.back { color: var(--accent); font-weight: 800; text-decoration: none; font-size: 17px; padding: 6px 0; }
+.ftitle { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.ftitle .ficon svg { width: 24px; height: 24px; }
+.folder-top .icon-btn { font-weight: 800; letter-spacing: 1px; }
+.sres { display: block; text-decoration: none; color: inherit; }
+.sres .nitem-head { cursor: pointer; }
+.np-text.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ed-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.fold-pick { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--muted); font-size: 14px; }
+.fold-pick select { border: 1.5px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--card); font-weight: 700; color: var(--text); font-size: 16px; max-width: 60vw; }
+.ed-top .icon-btn { flex: none; }
+/* Dialog extras: name box + choice list */
+.name-in { width: 100%; border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--card); outline: none; }
+.name-in:focus { border-color: var(--lav-ink); }
+.sheet h3 { margin-bottom: 10px; }
+.sheet-btn { display: block; width: 100%; text-align: left; border: 0; background: var(--soft); border-radius: 12px; padding: 13px 16px; margin-top: 8px; font-weight: 700; cursor: pointer; }
+.sheet-btn.danger { color: var(--danger); }
+.sheet-btn.cancel { text-align: center; background: none; color: var(--muted); }
+
+/* Full-screen note: no header or tabs, the page fills the screen. */
+body.fullpage .top, body.fullpage #tabs { display: none; }
+body.fullpage { padding-bottom: env(safe-area-inset-bottom); }
+body.fullpage .container { max-width: none; padding: calc(8px + env(safe-area-inset-top)) 14px 32px; }
+.full-note .ink-bar { top: calc(6px + env(safe-area-inset-top)); }
