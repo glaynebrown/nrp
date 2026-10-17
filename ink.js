@@ -99,25 +99,54 @@ const Ink = (() => {
     });
   }
 
-  function paint(ctx, s, pts, done = true) {
-    if (!pts.length) return;
+  // The smooth shape of a line (in page units).
+  function shape(s, pts, done) {
     const hl = s.k === 'hl';
     const real = !s.e && pts.some(p => Math.abs(p[2] - pts[0][2]) > 0.05);  // s.e = drawn with "Even line"
     const outline = getStroke(prepare(pts, s.q).map(p => [p[0], p[1], p[2] / 9]), hl
       ? { size: s.w * 4.5, thinning: 0, smoothing: 0.6, streamline: 0.2, simulatePressure: false, last: done }
       : { size: s.w * 1.1, thinning: real ? 0.22 : 0, smoothing: 0.6, streamline: 0.2, simulatePressure: false, last: done,
           start: { taper: 0, cap: true }, end: { taper: 0, cap: true } });
-    if (!outline.length) return;
-    ctx.save();
-    ctx.fillStyle = cssColor(s.c);
-    if (hl) ctx.globalAlpha = 0.4;
-    ctx.beginPath();
-    ctx.moveTo(outline[0][0], outline[0][1]);
+    const path = new Path2D();
+    if (!outline.length) return path;
+    path.moveTo(outline[0][0], outline[0][1]);
     for (let i = 0; i < outline.length; i++) {
       const a = outline[i], b = outline[(i + 1) % outline.length];
-      ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+      path.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
     }
-    ctx.closePath(); ctx.fill();
+    path.closePath();
+    return path;
+  }
+  /* Finished lines never change, so each one's points, outer box and smooth shape are
+     worked out once and kept. Redrawing a page (erasing, undo, scrolling) just paints them. */
+  const kept = new WeakMap();
+  function info(s) {
+    let k = kept.get(s);
+    if (!k) {
+      const pts = decode(s.p), pad = s.w * (s.k === 'hl' ? 2.5 : 1);
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      pts.forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); });
+      k = { pts, box: [x0 - pad, y0 - pad, x1 + pad, y1 + pad], path: null };
+      kept.set(s, k);
+    }
+    return k;
+  }
+  // Color names → actual colors, looked up once per redraw instead of once per line.
+  let colorMemo = new Map(), colorAt = 0;
+  const colorOf = c => {
+    if (performance.now() - colorAt > 500) { colorMemo = new Map(); colorAt = performance.now(); }
+    if (!colorMemo.has(c)) colorMemo.set(c, cssColor(c));
+    return colorMemo.get(c);
+  };
+  // pts given = a line still being drawn (not kept); otherwise the finished line's kept shape.
+  function paint(ctx, s, pts, done = true) {
+    let path;
+    if (pts) { if (!pts.length) return; path = shape(s, pts, done); }
+    else { const k = info(s); if (!k.pts.length) return; path = k.path ||= shape(s, k.pts, true); }
+    ctx.save();
+    ctx.fillStyle = colorOf(s.c);
+    if (s.k === 'hl') ctx.globalAlpha = 0.4;
+    ctx.fill(path);
     ctx.restore();
   }
 
@@ -194,7 +223,7 @@ const Ink = (() => {
       redraw();
     }
 
-    const drawStroke = (s, pts = decode(s.p)) => paint(ctx, s, pts);
+    const drawStroke = s => paint(ctx, s);
     function redraw() {
       ctx.clearRect(0, 0, W, height);
       if (ruled) {
@@ -229,10 +258,17 @@ const Ink = (() => {
     const paintLive = () => { frame = 0; if (live && !live.erase) { showBase(); paint(ctx, live, livePts.concat(livePred), false); } };
     const allowed = e => e.pointerType === 'pen' || e.pointerType === 'mouse' || (e.pointerType === 'touch' && fingerDraws && !penSeen);
 
+    // While erasing, redraw at most once per screen refresh.
+    let redrawFrame = 0;
+    const redrawSoon = () => { if (!redrawFrame) redrawFrame = requestAnimationFrame(() => { redrawFrame = 0; redraw(); }); };
     function eraseAt(p) {
       const r = 14;
-      const keep = data.filter(s => !decode(s.p).some(q => Math.abs(q[0] - p[0]) < r + s.w && Math.abs(q[1] - p[1]) < r + s.w));
-      if (keep.length !== data.length) { data = keep; redraw(); return true; }
+      const keep = data.filter(s => {
+        const k = info(s), [x0, y0, x1, y1] = k.box;
+        if (p[0] < x0 - r || p[0] > x1 + r || p[1] < y0 - r || p[1] > y1 + r) return true;  // nowhere near
+        return !k.pts.some(q => Math.abs(q[0] - p[0]) < r + s.w && Math.abs(q[1] - p[1]) < r + s.w);
+      });
+      if (keep.length !== data.length) { data = keep; redrawSoon(); return true; }
       return false;
     }
 
@@ -347,7 +383,7 @@ const Ink = (() => {
 
   // Small read-only picture of a drawing, cropped to what was drawn.
   function preview(canvas, strokes) {
-    const all = (strokes || []).map(s => ({ s, pts: decode(s.p) })).filter(x => x.pts.length);
+    const all = (strokes || []).map(s => ({ s, pts: info(s).pts })).filter(x => x.pts.length);
     if (!all.length) return;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     all.forEach(({ s, pts }) => pts.forEach(([x, y]) => { const r = s.k === 'hl' ? s.w * 2.5 : s.w;
@@ -360,7 +396,7 @@ const Ink = (() => {
     canvas.width = Math.ceil((x1 - x0) * scale * dpr); canvas.height = Math.ceil((y1 - y0) * scale * dpr);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, -x0 * dpr * scale, -y0 * dpr * scale);
-    all.forEach(({ s, pts }) => paint(ctx, s, pts));
+    all.forEach(({ s }) => paint(ctx, s));
   }
 
   function icon(n) {
@@ -381,7 +417,7 @@ const Ink = (() => {
     canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(h * scale * dpr);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
-    (strokes || []).forEach(s => paint(ctx, s, decode(s.p)));
+    (strokes || []).forEach(s => paint(ctx, s));
   }
 
   return { mount, preview, page, DEFAULT_PALETTE };
