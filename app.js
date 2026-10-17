@@ -646,7 +646,7 @@
       <input class="search" type="search" placeholder="Search notes" data-search value="${esc(noteSearch)}" autocomplete="off">
       <div data-results></div>
       <div data-folderlist>
-        <div class="folders">${folders.map(f => `<a class="folder" data-id="${esc(f.id)}" href="#/notes/${esc(f.id)}">${folderIcon(f)}<span class="fname">${esc(f.name)}</span>${f.layout === 'page' ? '<small class="fkind">One page</small>' : ''}<span class="fcount">${inFolder(f.id).length}</span><span class="chev-r"></span></a>`).join('')}</div>
+        <div class="folders">${folders.map(f => `<a class="folder" data-id="${esc(f.id)}" href="#/notes/${esc(f.id)}">${folderIcon(f)}<span class="fname">${esc(f.name)}</span><span class="fcount">${inFolder(f.id).length}</span><span class="chev-r"></span></a>`).join('')}</div>
         <button class="btn ghost small" data-newfolder>+ New folder</button>
       </div></div>`;
     const host = $('#notesBody'), box = $('[data-search]', host);
