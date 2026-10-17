@@ -56,19 +56,24 @@ h3 { font-size: 18px; }
 }
 #tabs a.on { background: var(--lav); color: var(--text); }
 #tabs a:hover:not(.on) { background: var(--soft); }
-#gear { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--muted); }
-#gear:hover, #gear.on { background: var(--soft); color: var(--head); }
+#gear, #notesBtn { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--muted); }
+#gear:hover, #notesBtn:hover { background: var(--soft); color: var(--head); }
+#gear.on, #notesBtn.on { background: var(--lav); color: var(--head); }
+.top-icons { display: flex; gap: 6px; align-items: center; }
 .top { flex-wrap: nowrap; }
 /* Keep the tabs truly centered: logo and gear take equal room on each side. */
 @media (min-width: 761px) {
   .top { display: grid; grid-template-columns: 1fr auto 1fr; }
-  #gear { justify-self: end; }
+  .top-icons { justify-self: end; }
 }
 
 @media (max-width: 760px) {
   /* A blurred header would trap the fixed tab bar inside it, so go solid. */
   .top { justify-content: center; backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg); position: sticky; }
+  /* Phones: notebook top left, gear top right. */
+  .top-icons { display: contents; }
   #gear { position: absolute; right: 12px; top: calc(12px + env(safe-area-inset-top)); }
+  #notesBtn { position: absolute; left: 12px; top: calc(12px + env(safe-area-inset-top)); }
   #tabs {
     position: fixed; bottom: 0; left: 0; right: 0; margin: 0; justify-content: space-around; align-items: flex-end;
     background: var(--card); border-top: 1px solid var(--line);
@@ -302,6 +307,13 @@ li.big {
 .nitem-prev canvas { display: block; max-width: 100%; background: var(--soft); border-radius: 10px; }
 .nitem.editing .nitem-prev { display: none; }
 .nitem.editing { border-color: var(--lav-ink); }
+.nitem.editing.own .nitem-head { display: none; }
+.nitem.editing.own { padding-top: 12px; }
+.nlist > .nitem { min-width: 0; }  /* never wider than the screen */
+@media (max-width: 560px) {
+  .notes-area .ed-top { flex-wrap: wrap; row-gap: 6px; }
+  .notes-area .ed-top .title-in { flex-basis: 100%; }  /* title gets its own line; Saved · Delete · Done under it */
+}
 .notes-area .title-in { flex: 1; min-width: 0; font-size: 24px; }
 .signin-hint { margin: 4px; }
 @media (max-width: 560px) {
@@ -697,3 +709,6 @@ li.big {
 .dialog-wrap { position: fixed; inset: 0; background: rgb(0 0 0 / .35); display: grid; place-items: center; z-index: 60; padding: 16px; }
 .dialog { background: var(--card); border-radius: 20px; padding: 22px; max-width: 380px; width: 100%; box-shadow: 0 20px 60px rgb(0 0 0 / .3); }
 .dialog p { color: var(--muted); }
+
+/* Notes page header: title left, + New note right. */
+.notes-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }

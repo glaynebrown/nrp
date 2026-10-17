@@ -53,6 +53,7 @@
     meds: svg('<path d="M18 2l4 4M20 4l-9.5 9.5M14 6l4 4M7 13l4 4M5.5 18.5L2 22M9.5 9.5l5 5-4.5 4.5a2.1 2.1 0 01-3 0l-2-2a2.1 2.1 0 010-3z"/>'),
     tips: svg('<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0012 3z"/>'),
     notes: svg('<path d="M4 20l1-5L16 4l4 4L9 19l-5 1z"/><path d="M14 6l4 4"/>'),
+    notebook: svg('<path d="M6 3h12a1 1 0 011 1v16a1 1 0 01-1 1H6a2 2 0 01-2-2V5a2 2 0 012-2z"/><path d="M8 3v18M11.5 8H16M11.5 12H16"/>'),
     settings: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>'),
     edit: svg('<path d="M12 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.4 2.6a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/>'),
     trash: svg('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>'),
@@ -193,23 +194,30 @@
 
 
   /* ================= Router ================= */
-  // Tips on the left, Algorithm (home) in the middle, Med math on the right. Settings = gear, top right.
+  // Tips on the left, Algorithm (home) in the middle, Med math on the right.
+  // Top corners: Notes (notebook) and Settings (gear); on bigger screens both sit at the right.
   const TABS = [['tips', 'Tips'], ['flow', 'Algorithm'], ['meds', 'Med math']];
   window.addEventListener('hashchange', render);
-  let editor = null;
+  let editor = null, curTab = 'flow', backHash = '#/flow';
   function render() {
     let [, tab = 'flow', arg] = (location.hash || '#/flow').split('/');
     if (tab === 'airway') tab = 'tips';
+    if (tab === 'page') tab = 'notes';
     closeEditor();
-    if (tab === 'page') { flowMode = 'notes'; tab = 'flow'; }
+    curTab = tab;
+    if (tab !== 'notes') backHash = location.hash || '#/flow';
     $$('#tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
     $('#gear').classList.toggle('on', tab === 'settings');
+    $('#notesBtn').classList.toggle('on', tab === 'notes');
     stopAnimations();
     window.scrollTo({ top: 0 });
-    ({ flow: renderFlow, meds: renderMeds, tips: renderTips, settings: renderSettings }[tab] || renderFlow)();
+    ({ flow: renderFlow, meds: renderMeds, tips: renderTips, settings: renderSettings, notes: renderNotesPage }[tab] || renderFlow)();
   }
   $('#tabs').innerHTML = TABS.map(([k, l]) => `<a href="#/${k}" data-tab="${k}" class="${k === 'flow' ? 'home' : ''}">${icons[k]}<span>${l}</span></a>`).join('');
   $('#gear').innerHTML = icons.settings;
+  $('#notesBtn').innerHTML = icons.notebook;
+  // Tapping the notebook again goes back to where you were.
+  $('#notesBtn').onclick = e => { if (curTab === 'notes') { e.preventDefault(); location.hash = backHash; } };
 
   let anims = [];
   const stopAnimations = () => { anims.forEach(f => f()); anims = []; };
@@ -270,17 +278,17 @@
   const hasContent = n => n && ((n.text || '').trim() || (n.strokes || []).length);
 
   function renderFlow() {
+    if (flowMode === 'notes') flowMode = 'ref';  // Notes moved to its own page (notebook icon)
     view.innerHTML = `
       <div class="flow-top">
         <div class="seg big" role="tablist">
-          ${[['ref', 'Reference'], ['notes', 'Notes'], ['study', 'Study'], ['run', 'Scenarios']].map(([k, l]) => `<button data-mode="${k}" class="${flowMode === k ? 'on' : ''}">${l}</button>`).join('')}
+          ${[['ref', 'Reference'], ['study', 'Study'], ['run', 'Scenarios']].map(([k, l]) => `<button data-mode="${k}" class="${flowMode === k ? 'on' : ''}">${l}</button>`).join('')}
         </div>
       </div>
       <div id="flowBody"></div>`;
     fitTitles($('.flow-top'));
     $$('[data-mode]').forEach(b => b.onclick = () => { editMode = false; flowMode = b.dataset.mode; local.set('flowMode', flowMode); renderFlow(); });
     if (flowMode === 'run') return renderRunArea($('#flowBody'));
-    if (flowMode === 'notes') return renderNotesMode($('#flowBody'));
     if (flowMode === 'study') return renderStudy($('#flowBody'));
     renderCards($('#flowBody'));
   }
@@ -294,11 +302,12 @@
   }
   // Notes changed on another device (or just saved): redraw without jumping to the top.
   function refreshFlow() {
+    if (curTab === 'notes') { if (!editor && $('#notesBody')) renderNotesMode($('#notesBody')); return; }
     const body = $('#flowBody');
     if (!body || editor || flowMode === 'run') return;
     if (editMode) return;  // don't wipe what you're typing
     if (flowMode === 'study') { if (studyMode !== 'quiz') renderCards($('#studyBody')); return; }
-    flowMode === 'notes' ? renderNotesMode(body) : renderCards(body);
+    renderCards(body);
   }
 
   /* One-line text (big step titles, "mg = mL" doses): if too long for the screen it shrinks just enough to fit. */
@@ -578,17 +587,22 @@
     const area = $(`[data-notes="${CSS.escape(key)}"]`); if (!area) return;
     area.hidden = false;
     $$(`[data-notes-toggle="${CSS.escape(key)}"]`).forEach(b => b.classList.add('on'));
-    area.closest('.nitem')?.classList.add('editing');
+    // Your own notes: the title box takes the heading's place while open (no repeat).
+    area.closest('.nitem')?.classList.add('editing', ...(key.startsWith('page:') ? ['own'] : []));
     if (Store.configured && !user) {
       area.innerHTML = `<p class="small signin-hint">Sign in from <a href="#/settings">Settings</a> to keep notes on all your devices.</p>`;
       editor = { key, host: area, signin: true };
       return;
     }
     const n = noteForKey(key);
-    mountEditor(area, n || { title: cardTitle(key), text: '', cardId: key, strokes: [], h: 900 }, { key, title: key.startsWith('page:'), canDelete: flowMode === 'notes' });
+    mountEditor(area, n || { title: cardTitle(key), text: '', cardId: key, strokes: [], h: 900 }, { key, title: key.startsWith('page:'), canDelete: curTab === 'notes' });
   }
 
-  // ---- Notes view: every step note (in algorithm order) + extra notes ----
+  // ---- Notes page (notebook icon): every step note (in algorithm order) + extra notes ----
+  function renderNotesPage() {
+    view.innerHTML = '<div id="notesBody"></div>';
+    renderNotesMode($('#notesBody'));
+  }
   function renderNotesMode(host) {
     const stepNotes = NRP.cards.map(c => noteFor(c.id)).filter(hasContent);
     const extra = notes.filter(n => !n.cardId || (!CARD[n.cardId] && hasContent(n))).sort((a, b) => (b.updated || 0) - (a.updated || 0));
@@ -607,7 +621,7 @@
       </div>`;
     };
     host.innerHTML = `
-      <div class="flow-tools"><button class="btn primary small" data-act="newnote">+ New note</button></div>
+      <div class="notes-top"><span class="pill">Notes</span><button class="btn primary small" data-act="newnote">+ New note</button></div>
       ${!Store.configured ? '<p class="banner">Sample mode: notes are saved on this device only.</p>' : ''}
       ${Store.configured && !user ? `<p class="banner">Sign in from <a href="#/settings">Settings</a> to keep notes.</p>` : ''}
       ${extra.length ? `<h3 class="nsec">My notes</h3><div class="nlist">${extra.map(item).join('')}</div>` : ''}
@@ -2196,6 +2210,7 @@
           ${title ? `<input class="title-in" placeholder="Title" value="${esc(n.title)}" data-title>` : ''}
           <span class="saved" data-saved>${n.id ? 'Saved' : ''}</span>
           ${canDelete && n.id ? '<button class="link danger-text" data-del>Delete</button>' : ''}
+          <button class="btn primary small" data-done>Done</button>
         </div>
         <textarea class="typed" placeholder="Type here, or write below with your Pencil…" data-text>${esc(n.text)}</textarea>
         <div class="ink" data-ink></div>
@@ -2209,6 +2224,7 @@
     ta.oninput = () => { ed.n.text = ta.value; grow(); ed.queue(); };
     const ti = $('[data-title]', host);
     if (ti) { ti.oninput = () => { ed.n.title = ti.value; ed.queue(); }; if (!n.title) setTimeout(() => ti.focus({ preventScroll: true }), 50); }
+    $('[data-done]', host).onclick = () => closeEditor();
     const del = $('[data-del]', host);
     if (del) del.onclick = async () => {
       if (!(await ask('Delete this note?', 'The typing and drawing will be gone for good.', 'Delete'))) return;
@@ -2239,17 +2255,22 @@
     const host = ed.host;
     const tidy = () => {
       host.innerHTML = ''; host.hidden = true;
-      host.closest('.nitem')?.classList.remove('editing');
+      host.closest('.nitem')?.classList.remove('editing', 'own');
       $$(`[data-notes-toggle="${CSS.escape(ed.key)}"]`).forEach(b => b.classList.remove('on'));
     };
     if (ed.signin) return tidy();
     clearTimeout(ed.timer); ed.ink.destroy(); tidy();
-    flush(ed).then(() => {
+    flush(ed).then(async () => {
       if (!ed.id) return;
+      // A new note closed with nothing in it (no title, typing or drawing) isn't kept.
+      if (ed.key.startsWith('page:') && !hasContent(ed.n) && !ed.n.title.trim()) {
+        try { await Store.deleteNote(ed.id); } catch (e) { console.error(e); }
+        notes = notes.filter(x => x.id !== ed.id);
+      }
       // Update this device's copy right away (the synced copy catches up by itself).
-      notes = [...notes.filter(x => x.id !== ed.id), { id: ed.id, ...ed.n, updated: Date.now() }];
+      else notes = [...notes.filter(x => x.id !== ed.id), { id: ed.id, ...ed.n, updated: Date.now() }];
       $$(`.pencil-btn[data-notes-toggle="${CSS.escape(ed.key)}"]`).forEach(b => b.classList.toggle('has', !!hasContent(ed.n)));
-      if (flowMode === 'notes' && !editor) refreshFlow();
+      if (curTab === 'notes' && !editor) refreshFlow();
     });
   }
   window.addEventListener('pagehide', () => flush());
