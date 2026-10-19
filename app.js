@@ -2494,7 +2494,7 @@
     grow();
     const ed = editor = { key, id: n.id || null, host, n: { title: n.title || '', text: n.text || '', cardId: n.cardId || null, folder: n.folder || null, strokes: n.strokes || [], h: n.h || 900 }, dirty: false, timer: null, chain: Promise.resolve(), onCreated };
     ed.queue = () => { ed.dirty = true; saved.textContent = 'Saving…'; clearTimeout(ed.timer); ed.timer = setTimeout(() => flush(ed), 700); };
-    ed.ink = !showInk ? { destroy() {} } : Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, palette: inkPalette, onPalette: saveInkPalette, pressure: !!(inkPalette && inkPalette.pressure), notify: toast,
+    ed.ink = !showInk ? { destroy() {} } : Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, palette: inkPalette, onPalette: saveInkPalette, pressure: !!(inkPalette && inkPalette.pressure), notify: toast, fingerButton: !!(inkPalette && inkPalette.finger),
       onChange: ({ strokes, h }) => { ed.n.strokes = strokes; ed.n.h = h; ed.queue(); } });
     if (ta) ta.oninput = () => { ed.n.text = ta.value; grow(); ed.queue(); };
     const ti = $('[data-title]', host);
@@ -2523,7 +2523,7 @@
   // Your pen + highlighter color presets (tap a chosen color again to change it). Synced.
   let inkPalette = local.get('inkPalette', null), inkTimer = null;
   function saveInkPalette(p) {
-    inkPalette = p; local.set('inkPalette', p);
+    inkPalette = { ...(inkPalette || {}), ...p }; local.set('inkPalette', inkPalette); p = inkPalette;
     clearTimeout(inkTimer); inkTimer = setTimeout(() => Store.savePrefs({ inkPalette: p }).catch(() => {}), 800);
   }
 
@@ -2594,6 +2594,7 @@
         <h2><span class="pill">Notes</span></h2>
         <p class="small">How do you take notes? Hides what you don’t use (anything already written still shows).</p>
         <div class="seg note-mode">${[['hand', 'Handwriting'], ['type', 'Typing'], ['both', 'Both']].map(([k, l]) => `<button data-notemode="${k}" class="${noteMode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <label class="toggle ink-pressure"><input type="checkbox" data-fingerbtn ${inkPalette && inkPalette.finger ? 'checked' : ''}> Show finger drawing button <small>(lets your finger draw on the iPad; your iPhone already draws with your finger)</small></label>
       </section>
       <section class="panel">
         <h2><span class="pill">Colors</span></h2>
@@ -2641,6 +2642,7 @@
     });
     $$('[data-reset]').forEach(b => b.onclick = resetTok);
     $$('[data-notemode]').forEach(b => b.onclick = () => { saveNoteMode(b.dataset.notemode); $$('[data-notemode]').forEach(x => x.classList.toggle('on', x === b)); });
+    $('[data-fingerbtn]').onchange = e => { saveInkPalette({ finger: e.target.checked }); };
     $('[data-pressure]').onchange = e => { saveInkPalette({ ...(inkPalette || {}), pressure: e.target.checked }); };
     $('[data-inkreset]').onclick = () => { inkPalette = null; local.set('inkPalette', null); Store.savePrefs({ inkPalette: null }).catch(() => {}); toast("Pen + highlighter colors and sizes reset"); renderSettings(); };
     $('[data-resetall]').onclick = () => { theme.custom[theme.look] = {}; saveTheme(); renderSettings(); };

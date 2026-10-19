@@ -56,7 +56,8 @@ const NRP = {
         'Good **tone**?',
         'All yes = ++delay cord clamping++',
       ],
-      asides: ['If some are “no” → warmer, or delay some. Either is appropriate.'],
+      asides: ['Key goal of deferred cord clamping: let the baby breathe on their own before the cord is clamped.',
+        'If some are “no” → warmer, or delay some. Either is appropriate.'],
     },
     {
       id: 'initial', phase: 'first', title: 'Initial steps',
@@ -411,6 +412,8 @@ const NRP = {
       why: '9th edition: ==Rate 30–60==.' },
     { id: 't-gasp', type: 'tf', card: 'decision', q: 'Gasping counts as breathing.', a: 'False',
       why: 'Gasping = apnea → ++Start PPV++.' },
+    { id: 't-dccgoal', type: 'tf', card: 'rapid', q: 'One key goal of deferred cord clamping is to let the baby breathe spontaneously before clamping.', a: 'True',
+      why: 'Deferred cord clamping lets the baby breathe on their own before the cord is clamped.' },
     { id: 't-warmer', type: 'tf', card: 'rapid', q: 'A vigorous term baby needs to go to the warmer.', a: 'False',
       why: 'Term + tone + breathing → skin to skin, routine care.' },
     { id: 't-stop60', type: 'tf', card: 'cpr', q: 'You can stop compressions once HR is over 60.', a: 'True',

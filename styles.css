@@ -789,18 +789,10 @@ body.fullpage .container { max-width: none; padding: calc(8px + env(safe-area-in
 .ink-pressure { margin-top: 14px; flex-wrap: wrap; }
 .ink-pressure small { color: var(--muted); font-weight: 600; }
 
-/* Drawing toolbar: tools · sizes · finger/pencil button · 6 colors · undo/redo at the far right.
-   iPhone: two rows (tools + sizes + finger / colors + undo/redo). */
-.ink-break { display: none; }
-.ink-undo { margin-left: auto; }
+/* Finger/Pencil switch (only if turned on in Settings → Notes) */
 .ink-mode { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--line); background: var(--soft); color: var(--muted); cursor: pointer; padding: 0; flex: none; }
 .ink-mode.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .ink-mode svg { width: 20px; height: 20px; }
-@media (max-width: 560px) {
-  .ink-break { display: block; flex-basis: 100%; height: 0; }
-  .ink-bar { row-gap: 6px; }
-  .ink-bar .sw { width: 26px; height: 26px; }  /* 6 colors + undo/redo fit on the second row */
-}
 
 /* Quiz: Select all that apply */
 .select-hint { margin: -4px 0 10px; }
@@ -859,3 +851,42 @@ body.fullpage .container { max-width: none; padding: calc(8px + env(safe-area-in
 @keyframes pv-in-r { from { transform: translateX(40px); opacity: 0; } }
 @keyframes pv-in-l { from { transform: translateX(-40px); opacity: 0; } }
 .note-mode { margin-top: 4px; }
+
+/* Drawing toolbar v3: tools · 3 quick colors · color tray · size · (finger) · undo/redo — one slim row */
+.ink-bar { gap: 6px; padding: 5px 6px; }
+.ink-bar .seg { padding: 3px; }
+.ink-bar .seg button { padding: 5px 7px; }
+.ink-bar .seg svg { width: 18px; height: 18px; }
+.ink-bar .swatches { gap: 5px; }
+.ink-bar .sw { width: 26px; height: 26px; }
+.ink-round { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--line); background: var(--card); color: var(--muted); padding: 0; cursor: pointer; flex: none; }
+.ink-round svg { width: 18px; height: 18px; }
+.ink-round.plain { border-color: transparent; background: none; }
+.ink-round:disabled { opacity: .35; cursor: default; }
+.ink-round[data-act=palette].on { box-shadow: 0 0 0 2.5px var(--c); color: var(--text); }
+.size-dot { display: block; width: var(--d, 10px); height: var(--d, 10px); border-radius: 50%; background: currentColor; }
+.ink-round[data-act=sizes] { color: var(--text); }
+.ink-mode { width: 32px; height: 32px; }
+.ink-mode svg { width: 18px; height: 18px; }
+.ink-undo { display: flex; gap: 2px; margin-left: auto; }
+.ink-pop-wrap { position: relative; }
+.ink-pop { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 20; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 30px -8px rgb(0 0 0 / .25); padding: 10px 12px; min-width: 150px; }
+.ink-pop[data-pop=sizes] { display: flex; gap: 6px; min-width: 0; }
+.ink-pop[data-pop=sizes][hidden] { display: none; }
+.ink-pop [data-size] { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 0; background: var(--soft); color: var(--text); cursor: pointer; }
+.ink-pop [data-size].on { background: var(--lav); box-shadow: 0 0 0 2px var(--lav-ink); }
+.ink-pop [data-size] i { display: block; width: var(--d); height: var(--d); border-radius: 50%; background: currentColor; }
+.tray-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 2px 0 6px; }
+.tray-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.tray-row .sw { width: 32px; height: 32px; }
+.sw.swap { animation: sw-pulse 1s ease-in-out infinite; }
+@keyframes sw-pulse { 50% { box-shadow: 0 0 0 3px var(--lav-ink); } }
+.tray-hint { margin: 2px 0 6px; font-size: 12px; color: var(--muted); max-width: 160px; }
+.ink-pop .link { font-size: 13px; }
+@media (max-width: 420px) {  /* iPhone: keep the toolbar on one row */
+  .ink-bar { gap: 5px; }
+  .ink-bar .seg button { padding: 5px 6px; }
+  .ink-bar .swatches { gap: 4px; }
+  .ink-round, .ink-mode { width: 30px; height: 30px; }
+  .ink-undo { gap: 0; }
+}

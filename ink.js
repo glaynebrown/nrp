@@ -165,7 +165,8 @@ const Ink = (() => {
 
   // palette: your presets {pen: [6], hl: [6]}; onPalette(palette) when you change one.
   // pressure: true = lines thicken when you press harder (Settings); otherwise every line is even.
-  function mount(host, { strokes = [], h = 1300, ruled = true, onChange, palette, onPalette, pressure = false, notify }) {
+  // fingerButton: show the finger/Pencil switch in the toolbar (Settings → Notes).
+  function mount(host, { strokes = [], h = 1300, ruled = true, onChange, palette, onPalette, pressure = false, notify, fingerButton = false }) {
     let data = strokes.map(s => ({ ...s }));
     let height = h;
     const pal = { pen: [...((palette && palette.pen) || DEFAULT_PALETTE.pen)], hl: [...((palette && palette.hl) || DEFAULT_PALETTE.hl)] };
@@ -187,14 +188,20 @@ const Ink = (() => {
           <button data-tool="hl" title="Highlighter">${icon('hl')}</button>
           <button data-tool="erase" title="Eraser (removes whole strokes)">${icon('erase')}</button>
         </div>
-        <div class="seg sizes">${Object.keys(SIZES).map(s => `<button data-size="${s}" title="${s}"><i style="--d:${SIZES[s] * 2 + 2}px"></i></button>`).join('')}</div>
-        <button class="ink-mode" data-act="finger" title="Pencil only (tap so your finger draws too)"></button>
-        <span class="ink-break"></span>
-        <div class="swatches">${[0, 1, 2, 3, 4, 5].map(i => `<button class="sw" data-color="${i}" title="Color (tap again to change)"></button>`).join('')}
+        <div class="swatches">${[0, 1, 2].map(i => `<button class="sw" data-color="${i}" title="Color (tap again to change)"></button>`).join('')}
           <input type="color" class="sw-picker" data-picker tabindex="-1" aria-hidden="true"></div>
-        <div class="seg ink-undo">
-          <button data-act="undo" title="Undo">${icon('undo')}</button>
-          <button data-act="redo" title="Redo">${icon('redo')}</button>
+        <div class="ink-pop-wrap">
+          <button class="ink-round" data-act="palette" title="All colors" aria-label="All colors">${icon('palette')}</button>
+          <div class="ink-pop" data-pop="palette" hidden></div>
+        </div>
+        <div class="ink-pop-wrap">
+          <button class="ink-round" data-act="sizes" title="Size" aria-label="Size"><i class="size-dot"></i></button>
+          <div class="ink-pop" data-pop="sizes" hidden>${Object.keys(SIZES).map(s => `<button data-size="${s}" title="${s}"><i style="--d:${SIZES[s] * 2 + 2}px"></i></button>`).join('')}</div>
+        </div>
+        ${fingerButton ? '<button class="ink-mode" data-act="finger" title="Pencil only (tap so your finger draws too)"></button>' : ''}
+        <div class="ink-undo">
+          <button class="ink-round plain" data-act="undo" title="Undo" aria-label="Undo">${icon('undo')}</button>
+          <button class="ink-round plain" data-act="redo" title="Redo" aria-label="Redo">${icon('redo')}</button>
         </div>
       </div>
       <div class="ink-page"><canvas></canvas></div>
@@ -218,16 +225,51 @@ const Ink = (() => {
         b.classList.toggle('on', tool !== 'erase' && +b.dataset.color === pick[set()]);
         b.classList.toggle('hl', set() === 'hl');
       });
-      host.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', tool !== 'erase' && b.dataset.size === sizes[set()]));
+      host.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', b.dataset.size === sizes[set()]));
+      // size button shows the current size; palette button rings the color if it's not one of the quick 3
+      host.querySelector('.size-dot').style.setProperty('--d', SIZES[sizes[set()]] * 2 + 2 + 'px');
+      const other = tool !== 'erase' && pick[set()] > 2;
+      const pb = host.querySelector('[data-act=palette]');
+      pb.classList.toggle('on', other); pb.style.setProperty('--c', other ? cssColor(color()) : '');
+      if (!host.querySelector('[data-pop=palette]').hidden) renderPalette();
       host.querySelector('[data-act=undo]').disabled = !undo.length;
       host.querySelector('[data-act=redo]').disabled = !redo.length;
       canvas.style.touchAction = fingerDraws ? 'none' : 'pan-y';
       const fm = host.querySelector('[data-act=finger]');
-      fm.innerHTML = icon(fingerDraws ? 'finger' : 'pen'); fm.classList.toggle('on', fingerDraws);
-      fm.title = fingerDraws ? 'Finger draws (tap for Pencil only)' : 'Pencil only (tap so your finger draws too)';
-      fm.setAttribute('aria-label', fm.title);
+      if (fm) {
+        fm.innerHTML = icon(fingerDraws ? 'finger' : 'pen'); fm.classList.toggle('on', fingerDraws);
+        fm.title = fingerDraws ? 'Finger draws (tap for Pencil only)' : 'Pencil only (tap so your finger draws too)';
+        fm.setAttribute('aria-label', fm.title);
+      }
       canvas.style.cursor = tool === 'erase' ? 'cell' : 'crosshair';
     }
+
+    /* The color tray: all 6 colors. Quick = the first 3 (shown in the toolbar). Tap = use it;
+       tap the one you're using = change it (rainbow chooser). "Make it a quick color" swaps an
+       "other" color into one of the quick 3 (you tap which one). */
+    let swapping = false;
+    function renderPalette() {
+      const pop = host.querySelector('[data-pop=palette]'), k = set(), cur = tool === 'erase' ? -1 : pick[k];
+      const sw = i => `<button class="sw${i === cur ? ' on' : ''}${swapping && i < 3 ? ' swap' : ''}" data-tray="${i}" style="--c:${cssColor(pal[k][i])}" title="${i === cur ? 'Tap again to change this color' : 'Use this color'}"></button>`;
+      pop.innerHTML = `
+        <div class="tray-label">Quick</div><div class="tray-row">${[0, 1, 2].map(sw).join('')}</div>
+        <div class="tray-label">More</div><div class="tray-row">${[3, 4, 5].map(sw).join('')}</div>
+        <p class="tray-hint">${swapping ? 'Tap the quick color to swap it with.' : cur >= 0 ? 'Tap your color again to change it.' : 'Tap a color to use it.'}</p>
+        ${cur > 2 && !swapping ? '<button class="link" data-swap>Make it a quick color</button>' : ''}`;
+    }
+    const closePops = () => { swapping = false; host.querySelectorAll('[data-pop]').forEach(p => p.hidden = true); };
+    const togglePop = name => {
+      const pop = host.querySelector(`[data-pop=${name}]`), open = pop.hidden;
+      closePops(); pop.hidden = !open;
+      if (open && name === 'palette') renderPalette();
+    };
+    const outside = e => { if (!host.isConnected) return document.removeEventListener('pointerdown', outside, true); if (!e.target.closest('.ink-pop-wrap')) closePops(); };
+    document.addEventListener('pointerdown', outside, true);
+    const openRainbow = (k, i) => {
+      const inp = host.querySelector('[data-picker]');
+      inp.value = toHex(pal[k][i]); inp.dataset.set = k; inp.dataset.i = i;
+      inp.click();
+    };
 
     function resize() {
       const cssW = page.clientWidth || 600;
@@ -348,23 +390,32 @@ const Ink = (() => {
     // ---- Toolbar ----
     host.addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
-      if (b.dataset.tool) tool = b.dataset.tool;
+      if (b.dataset.tool) { tool = b.dataset.tool; closePops(); }
       if (b.dataset.color) {
         const i = +b.dataset.color;
+        closePops();
         if (tool === 'erase') tool = 'pen';
-        else if (i === pick[set()]) {
-          // Tap the chosen color again → rainbow color chooser to change this preset.
-          const inp = host.querySelector('[data-picker]');
-          inp.value = toHex(pal[set()][i]); inp.dataset.set = set(); inp.dataset.i = i;
-          inp.click(); return;
-        }
+        // Tap the chosen color again → rainbow color chooser to change this preset.
+        else if (i === pick[set()]) return openRainbow(set(), i);
         pick[set()] = i;
       }
+      if (b.dataset.tray) {
+        const i = +b.dataset.tray, k = set();
+        if (swapping && i < 3) {  // swap the chosen "more" color into this quick spot
+          const j = pick[k]; [pal[k][i], pal[k][j]] = [pal[k][j], pal[k][i]]; pick[k] = i;
+          swapping = false; savePal(); syncBar(); closePops(); notify && notify('Quick colors updated'); return;
+        }
+        if (tool === 'erase') tool = 'pen';
+        if (i === pick[set()]) { closePops(); return openRainbow(set(), i); }
+        pick[set()] = i; syncBar(); renderPalette(); return;
+      }
+      if (b.hasAttribute('data-swap')) { swapping = true; renderPalette(); return; }
       if (b.dataset.size) {
         if (tool === 'erase') tool = 'pen';
-        sizes[set()] = b.dataset.size; savePal();
+        sizes[set()] = b.dataset.size; savePal(); closePops();
       }
       const act = b.dataset.act;
+      if (act === 'palette' || act === 'sizes') { togglePop(act); return; }
       if (act === 'finger') { fingerDraws = !fingerDraws; syncBar(); notify && notify(fingerDraws ? 'Finger draws' : 'Pencil only'); return; }
       if (act === 'undo' && undo.length) { redo.push(snapshot()); const s = undo.pop(); data = s.data; height = s.height; resize(); changed(); return; }
       if (act === 'redo' && redo.length) { undo.push(snapshot()); const s = redo.pop(); data = s.data; height = s.height; resize(); changed(); return; }
@@ -417,6 +468,7 @@ const Ink = (() => {
       erase: '<path d="M8 20h12"/><path d="M4 15l9-10 7 7-8 8H9z"/>',
       undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
       redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/>',
+      palette: '<path d="M12 3a9 9 0 100 18c1.1 0 1.6-.8 1.6-1.6 0-.5-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a5 5 0 005-5c0-4.1-4-7.6-9-7.6z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7.2" r="1"/><circle cx="14.5" cy="7.2" r="1"/>',
       finger: '<path d="M9 11V5a1.5 1.5 0 013 0v5"/><path d="M12 10V8.5a1.5 1.5 0 013 0V11"/><path d="M15 10.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1a6 6 0 01-4.6-2.2L4 15.5a1.6 1.6 0 012.4-2.1L9 16"/>',
     }[n];
     return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
