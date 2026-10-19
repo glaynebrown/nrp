@@ -602,9 +602,7 @@
   }
   const keyFor = n => (n.cardId && CARD[n.cardId]) ? n.cardId : 'page:' + n.id;
   const noteForKey = key => key.startsWith('page:') ? notes.find(n => n.id === key.slice(5)) : noteFor(key);
-  function drawPreviews(root) {
-    $$('canvas[data-preview]', root).forEach(cv => { const n = notes.find(x => x.id === cv.dataset.preview); if (n) Ink.preview(cv, n.strokes); });
-  }
+
 
   // Pencil (or a note in the Notes list): tap to open, tap again to close.
   function toggleNotes(key) {
@@ -653,25 +651,38 @@
   const signinBanner = () => !Store.configured ? '<p class="banner">Sample mode: notes are saved on this device only.</p>'
     : !user ? `<p class="banner">Sign in from <a href="#/settings">Settings</a> to keep notes.</p>` : '';
 
+  // Notes = a notebook: each section (folder) is a tile showing its first page; tap opens it full screen,
+  // swipe between its pages, "+ Page" adds one at the end.
   function renderNotesPage(fid, nid) {
     const f = fid && folders.find(x => x.id === fid);
-    if (!f) return renderFolders();
-    if (nid || f.layout === 'page') return renderFullNote(f, nid);
-    renderFolder(f);
+    if (!f) return renderSections();
+    renderFullNote(f, nid);
   }
 
-  // Folder list + search
-  function renderFolders() {
+  function renderSections() {
+    const tile = f => {
+      const pages = inFolder(f.id), first = pages[0], ink = first && (first.strokes || []).length;
+      const txt = first && `${first.title ? first.title + '\n' : ''}${first.text || ''}`.trim();
+      return `<a class="nb-tile${pages.length > 1 ? ' stack' : ''}" data-id="${esc(f.id)}" href="#/notes/${esc(f.id)}">
+        <div class="nb-thumb">${ink ? `<canvas data-thumb="${esc(first.id)}"></canvas>` : txt ? `<p class="nb-text">${esc(txt)}</p>` : '<span class="nb-empty">Empty</span>'}</div>
+        <div class="nb-name">${folderIcon(f)}<span>${esc(f.name)}</span></div>
+        ${pages.length > 1 ? `<small class="nb-count">${pages.length} pages</small>` : ''}
+      </a>`;
+    };
     view.innerHTML = `<div id="notesBody">
       <div class="notes-top"><span class="pill">Notes</span></div>
       ${signinBanner()}
       <input class="search" type="search" placeholder="Search notes" data-search value="${esc(noteSearch)}" autocomplete="off">
       <div data-results></div>
       <div data-folderlist>
-        <div class="folders">${folders.map(f => `<a class="folder" data-id="${esc(f.id)}" href="#/notes/${esc(f.id)}">${folderIcon(f)}<span class="fname">${esc(f.name)}</span><span class="fcount">${inFolder(f.id).length}</span><span class="chev-r"></span></a>`).join('')}</div>
-        <button class="btn ghost small" data-newfolder>+ New folder</button>
+        <div class="nb-grid">${folders.map(tile).join('')}<button class="nb-new" data-newfolder><b>+</b>New section</button></div>
       </div></div>`;
     const host = $('#notesBody'), box = $('[data-search]', host);
+    // Thumbnails: the top of each section's first page, drawn to the tile's width.
+    $$('canvas[data-thumb]', host).forEach(cv => {
+      const n = notes.find(x => x.id === cv.dataset.thumb);
+      if (n) Ink.page(cv, n.strokes, n.h || 1300, cv.parentElement.clientWidth);
+    });
     const search = () => {
       noteSearch = box.value;
       const q = noteSearch.trim().toLowerCase();
@@ -687,100 +698,91 @@
     };
     box.oninput = search;
     search();
-    dragSort($('.folders', host), '.folder', ids => { folders = ids.map(id => folders.find(f => f.id === id)).filter(Boolean); saveFolders(); });
+    dragSort($('.nb-grid', host), '.nb-tile', ids => { folders = ids.map(id => folders.find(f => f.id === id)).filter(Boolean); saveFolders(); });
     $('[data-newfolder]', host).onclick = async () => {
-      const name = await promptText('New folder', '', 'Create'); if (!name) return;
-      const gi = folders.findIndex(f => f.id === 'general');
-      folders.splice(gi < 0 ? folders.length : gi, 0, { id: uid('f'), name, icon: '', layout: 'list' });
-      saveFolders(); renderFolders();
+      const name = await promptText('New section', '', 'Create'); if (!name) return;
+      const gi = folders.findIndex(f => f.id === 'general'), f = { id: uid('f'), name, icon: '', layout: 'page' };
+      folders.splice(gi < 0 ? folders.length : gi, 0, f);
+      saveFolders(); location.hash = '#/notes/' + f.id;
     };
   }
 
-  // One folder in "Notes" layout: a list of notes that open in place.
-  function renderFolder(f) {
-    const list = inFolder(f.id);
-    const item = n => {
-      const key = 'page:' + n.id;
-      // No dates on the cards (learning notes); the date shows inside an open note.
-      return `<div class="nitem${n.title ? '' : ' notitle'}" data-id="${esc(n.id)}">
-        ${n.title ? `<button class="nitem-head" data-notes-toggle="${esc(key)}"><span class="ntitle">${esc(n.title)}</span></button>` : ''}
-        <div class="nitem-prev" data-notes-toggle="${esc(key)}">
-          ${(n.text || '').trim() ? `<p class="np-text">${esc(n.text)}</p>` : ''}
-          ${(n.strokes || []).length ? `<canvas data-preview="${n.id}"></canvas>` : ''}
-          ${!n.title && !(n.text || '').trim() && !(n.strokes || []).length ? '<p class="np-text muted">Empty note</p>' : ''}
-        </div>
-        <div class="notes-area" data-notes="${esc(key)}" hidden></div>
-      </div>`;
-    };
-    view.innerHTML = `<div id="notesBody">
-      <div class="folder-top"><a class="back" href="#/notes">‹ Folders</a><button class="icon-btn" data-fmenu aria-label="Folder options" title="Folder options">•••</button></div>
-      <div class="notes-top"><span class="pill ftitle">${folderIcon(f)}${esc(f.name)}</span><button class="btn primary small" data-act="newnote">+ New note</button></div>
-      ${signinBanner()}
-      ${list.length ? `<div class="nlist">${list.map(item).join('')}</div>` : '<p class="empty">No notes here yet.</p>'}</div>`;
-    const host = $('#notesBody');
-    drawPreviews(host);
-    const nl = $('.nlist', host);
-    if (nl) dragSort(nl, '.nitem:not(.editing)', ids => { f.order = ids; saveFolders(); });
-    host.onclick = async e => {
-      if (e.target.closest('[data-fmenu]')) return folderMenu(f);
-      if (e.target.closest('[data-act="newnote"]')) {
-        if (Store.configured && !user) { location.hash = '#/settings'; return toast('Sign in first to keep notes'); }
-        closeEditor();
-        const blank = { title: '', text: '', cardId: null, folder: f.id, strokes: [], h: 1300 };
-        let id; try { id = await Store.saveNote(blank); } catch (err) { return saveFailed(err); }
-        if (!notes.find(n => n.id === id)) notes = [...notes, { id, ...blank, updated: Date.now() }];
-        renderFolder(f);
-        toggleNotes('page:' + id);
-        return;
-      }
-      const t = e.target.closest('[data-notes-toggle]');
-      if (t) toggleNotes(t.dataset.notesToggle);
-    };
+  // A new page goes at the end of its section (and the current order is kept as it is).
+  function addToOrder(f, id) {
+    f.order = [...inFolder(f.id).map(p => p.id).filter(x => x !== id), id];
+    saveFolders();
   }
 
-  // A note on the whole screen (header + tabs hidden). "One page" folders always open like this.
-  // It opens as a VIEW: the whole page shrunk to fit the screen (title/typing only if there are any).
-  // Tap it to edit (tools, colors, typing); Done comes back to the view.
-  let fullEditing = false;
+  // A page on the whole screen (header + tabs hidden). It opens as a VIEW: the whole page shrunk
+  // to fit (title/typing only if there are any). Swipe or ‹ › for the section's other pages.
+  // Tap to edit (tools, colors, typing); Done comes back to the view. nid 'new' = "+ Page".
+  let fullEditing = false, slideDir = 0;
   function renderFullNote(f, nid) {
-    const isPage = f.layout === 'page' && !nid;
-    const n = nid ? notes.find(x => x.id === nid) : inFolder(f.id)[0];
-    if (nid && !n) { location.hash = '#/notes/' + f.id; return; }  // deleted on another device
-    const back = isPage ? '#/notes' : '#/notes/' + f.id;
+    const pages = inFolder(f.id), isNew = nid === 'new';
+    const i = isNew ? pages.length : nid ? pages.findIndex(p => p.id === nid) : 0;
+    if (nid && !isNew && i < 0) { location.hash = '#/notes/' + f.id; return; }  // deleted on another device
+    const n = isNew ? null : pages[i] || null, total = pages.length + (isNew ? 1 : 0);
+    const home = '#/notes/' + f.id;
     document.body.classList.add('fullpage');
     view.innerHTML = `<div id="notesBody">
-      <div class="folder-top"><a class="back" href="${back}">‹ ${isPage ? 'Folders' : esc(f.name)}</a>${isPage ? '<button class="icon-btn" data-fmenu aria-label="Folder options" title="Folder options">•••</button>' : ''}</div>
+      <div class="folder-top full-top">
+        <a class="back" href="#/notes">‹ Notes</a>
+        <span class="ftop-title">${folderIcon(f)}<span>${esc(f.name)}</span></span>
+        <span class="ftop-actions">${isNew ? '' : '<button class="link add-page" data-addpage>+ Page</button>'}<button class="icon-btn" data-fmenu aria-label="Section options" title="Section options">•••</button></span>
+      </div>
       <div class="full-note" data-full></div></div>`;
-    if (isPage) $('[data-fmenu]').onclick = () => folderMenu(f);
+    $('[data-fmenu]').onclick = () => folderMenu(f);
+    const ap = $('[data-addpage]'); if (ap) ap.onclick = () => { location.hash = `#/notes/${f.id}/new`; };
     const host = $('[data-full]');
     if (Store.configured && !user) { host.innerHTML = `<p class="small signin-hint">Sign in from <a href="#/settings">Settings</a> to keep notes on all your devices.</p>`; return; }
     const again = () => renderFullNote(f, nid);
-    if (!fullEditing) return renderPageView(host, n, () => { fullEditing = true; again(); });
+    const go = d => { const p = pages[i + d]; if (!p) return; slideDir = d; location.hash = `#/notes/${f.id}/${p.id}`; };
+    if (!fullEditing && !isNew) return renderPageView(host, n, () => { fullEditing = true; again(); }, { i, total, go });
     // A new page is only saved once you write something.
     mountEditor(host, n || { title: '', text: '', cardId: null, folder: f.id, strokes: [], h: 1300 },
-      { key: 'page:' + (n ? n.id : 'new-' + f.id), title: true, canDelete: true, full: back,
-        onDone: () => { closeEditor(); fullEditing = false; again(); } });
+      { key: 'page:' + (n ? n.id : 'new-' + f.id), title: true, canDelete: true, full: home,
+        onCreated: id => addToOrder(f, id),
+        onDone: () => {
+          const ed = editor; closeEditor(); fullEditing = false;
+          if (!isNew && n) return again();
+          // New page: show it once it's saved (or the section if it was left empty).
+          ed.chain.then(() => { location.hash = ed.id && notes.some(x => x.id === ed.id) ? `${home}/${ed.id}` : home; });
+        } });
   }
   // The fitted, read-only page. Only what's there: title, typing, handwriting.
-  function renderPageView(host, n, edit) {
+  function renderPageView(host, n, edit, { i = 0, total = 1, go } = {}) {
     const text = (n && n.text || '').trim(), strokes = (n && n.strokes) || [];
     const empty = !n || (!text && !strokes.length && !(n.title || '').trim());
-    host.innerHTML = `<div class="page-view" data-edit role="button" tabindex="0" aria-label="Edit this note">
+    const slide = slideDir > 0 ? ' from-right' : slideDir < 0 ? ' from-left' : ''; slideDir = 0;
+    host.innerHTML = `<div class="page-view${slide}" data-edit role="button" tabindex="0" aria-label="Edit this page">
       ${n && n.title ? `<h2 class="pv-title">${esc(n.title)}</h2>` : ''}
       ${text ? `<p class="np-text pv-text">${esc(n.text)}</p>` : ''}
       ${strokes.length || empty ? '<div class="pv-page"><canvas></canvas>' + (empty ? '<span class="pv-hint">Tap to start writing</span>' : '') + '</div>' : ''}
-      ${empty ? '' : '<p class="pv-tap">Tap to edit</p>'}
-    </div>`;
+      ${empty ? '' : '<span class="pv-chip">Tap to edit</span>'}
+    </div>
+    ${total > 1 ? `<div class="pager">
+      <button class="icon-btn" data-pg="-1" ${i > 0 ? '' : 'disabled'} aria-label="Previous page">‹</button>
+      <span class="pg-dots">${Array.from({ length: total }, (_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</span>
+      <button class="icon-btn" data-pg="1" ${i < total - 1 ? '' : 'disabled'} aria-label="Next page">›</button>
+    </div>` : ''}`;
     const pv = $('[data-edit]', host);
-    pv.onclick = edit;
+    // Swipe left/right = next/previous page (a swipe never opens the editor).
+    let sx = 0, sy = 0, swiped = false;
+    pv.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; swiped = false; }, { passive: true });
+    pv.addEventListener('touchend', e => {
+      const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+      if (go && Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy)) { swiped = true; go(dx < 0 ? 1 : -1); }
+    });
+    pv.onclick = () => { if (!swiped) edit(); swiped = false; };
     pv.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); edit(); } };
+    $$('[data-pg]', host).forEach(b => b.onclick = () => go && go(+b.dataset.pg));
     const cv = $('.pv-page canvas', host);
-    if (!cv) return;
+    if (!cv) { pageViewFit = null; return; }
     // Whole page (blank space included) as big as fits: limited by width and by the room left on screen.
     const h = (n && n.h) || 1300;
     const fit = () => {
       const box = cv.parentElement;
-      const roomH = window.innerHeight - (box.getBoundingClientRect().top + window.scrollY) - 44;
+      const roomH = window.innerHeight - (box.getBoundingClientRect().top + window.scrollY) - (total > 1 ? 64 : 24);
       const w = Math.max(120, Math.min(pv.clientWidth, Math.max(160, roomH) * 1000 / h));
       Ink.page(cv, strokes, h, w);
     };
@@ -795,38 +797,40 @@
      page scrolls along. onDrop gets the data-ids in their new order. */
   function dragSort(list, sel, onDrop) {
     const HOLD = 450, SLOP = 8;
-    let item = null, timer = null, startX = 0, startY = 0, lastY = 0, base = 0, lifted = false, raf = 0, eatClick = false;
+    let item = null, timer = null, startX = 0, startY = 0, lastX = 0, lastY = 0, base = 0, baseX = 0, lifted = false, raf = 0, eatClick = false;
     const items = () => $$(':scope > ' + sel, list);
     const pageY = y => y + window.scrollY;
     function lift() {
       lifted = true; item.classList.add('dragging'); list.classList.add('sorting');
-      base = pageY(startY); navigator.vibrate?.(10);
+      base = pageY(startY); baseX = startX; navigator.vibrate?.(10);
       const loop = () => {
         const edge = lastY < 90 ? -10 : lastY > innerHeight - 110 ? 10 : 0;
-        if (edge) { window.scrollBy(0, edge); follow(lastY); }
+        if (edge) { window.scrollBy(0, edge); follow(lastX, lastY); }
         raf = requestAnimationFrame(loop);
       };
       raf = requestAnimationFrame(loop);
     }
-    function follow(y) {
-      lastY = y;
-      item.style.transform = `translateY(${pageY(y) - base}px)`;
-      const r = item.getBoundingClientRect(), mid = r.top + r.height / 2;
-      for (const sib of items()) {
-        if (sib === item) continue;
-        const sr = sib.getBoundingClientRect(), smid = sr.top + sr.height / 2;
-        const before = sib.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING;  // sib is above item
-        if ((before && mid < smid) || (!before && mid > smid)) {
-          const was = item.offsetTop, sibWas = sib.getBoundingClientRect().top;
-          before ? list.insertBefore(item, sib) : list.insertBefore(item, sib.nextSibling);
-          base += item.offsetTop - was;
-          item.style.transform = `translateY(${pageY(y) - base}px)`;
-          // slide the one that moved aside
-          const d = sibWas - sib.getBoundingClientRect().top;
-          sib.animate([{ transform: `translateY(${d}px)` }, { transform: 'none' }], { duration: 160, easing: 'ease-out' });
-          break;
-        }
-      }
+    // Works for lists and grids: when your finger is over another item, the lifted one takes its place.
+    function follow(x, y) {
+      lastX = x; lastY = y;
+      item.style.transform = `translate(${x - baseX}px, ${pageY(y) - base}px)`;
+      const all = items(), target = all.find(sib => {
+        if (sib === item) return false;
+        const r = sib.getBoundingClientRect();
+        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      });
+      if (!target) return;
+      const before = all.indexOf(target) < all.indexOf(item);
+      const was = new Map(all.map(el => [el, el.getBoundingClientRect()])), wasL = item.offsetLeft, wasT = item.offsetTop;
+      list.insertBefore(item, before ? target : target.nextSibling);
+      baseX += item.offsetLeft - wasL; base += item.offsetTop - wasT;
+      item.style.transform = `translate(${x - baseX}px, ${pageY(y) - base}px)`;
+      // slide the others into their new spots
+      all.forEach(el => {
+        if (el === item) return;
+        const a = was.get(el), b = el.getBoundingClientRect();
+        if (a.left !== b.left || a.top !== b.top) el.animate([{ transform: `translate(${a.left - b.left}px, ${a.top - b.top}px)` }, { transform: 'none' }], { duration: 160, easing: 'ease-out' });
+      });
     }
     function end(cancelled) {
       clearTimeout(timer); timer = null;
@@ -842,13 +846,13 @@
     const start = (e, x, y) => {
       const it = e.target.closest(sel);
       if (!it || it.parentElement !== list || e.target.closest('.notes-area, input, textarea, select')) return;
-      item = it; startX = x; startY = lastY = y; lifted = false;
+      item = it; startX = lastX = x; startY = lastY = y; lifted = false;
       timer = setTimeout(lift, HOLD);
     };
     const move = (e, x, y) => {
       if (!item) return;
       if (!lifted) { if (Math.hypot(x - startX, y - startY) > SLOP) end(true); return; }
-      e.preventDefault(); follow(y);
+      e.preventDefault(); follow(x, y);
     };
     // Touch (iPhone/iPad): touchmove must be non-passive so a lifted item stops the page scrolling.
     list.addEventListener('touchstart', e => e.touches.length === 1 && start(e, e.touches[0].clientX, e.touches[0].clientY), { passive: true });
@@ -868,20 +872,16 @@
     list.addEventListener('dragstart', e => e.preventDefault());  // no native link/image drag
   }
 
-  // ••• on a folder: rename, layout, delete.
+  // ••• on a section: rename, icon, delete.
   function folderMenu(f) {
     const count = inFolder(f.id).length;
     const again = () => renderNotesPage(...notesArgs);
     sheet(f.name, [
-      ['Rename', async () => { const v = await promptText('Rename folder', f.name, 'Save'); if (v) { f.name = v; saveFolders(); again(); } }],
-      f.layout === 'page'
-        ? ['Show as a list of notes', () => { f.layout = 'list'; saveFolders(); location.hash = '#/notes/' + f.id; again(); }]
-        : ['Show as one page', async () => {
-            if (count > 1 && !(await ask('Show as one page?', `This folder has ${count} notes. One page shows the newest one. The others stay saved and come back if you switch to a list.`, 'One page', 'primary'))) return;
-            f.layout = 'page'; saveFolders(); closeEditor(); again();
-          }],
-      f.id !== 'general' && ['Delete folder', async () => {
-        if (!(await ask(`Delete “${f.name}”?`, count ? `Its ${count} note${count === 1 ? '' : 's'} will move to General.` : 'It has no notes.', 'Delete'))) return;
+      ['Rename', async () => { const v = await promptText('Rename section', f.name, 'Save'); if (v) { f.name = v; saveFolders(); again(); } }],
+      ['Change icon', () => sheet('Icon', [...STEP_ICONS.map(([k, name]) => [name, () => { f.icon = k; saveFolders(); again(); }]),
+        ['Plain folder', () => { f.icon = ''; saveFolders(); again(); }]])],
+      f.id !== 'general' && ['Delete section', async () => {
+        if (!(await ask(`Delete “${f.name}”?`, count ? `Its ${count} page${count === 1 ? '' : 's'} will move to General.` : 'It has no pages.', 'Delete'))) return;
         closeEditor();
         for (const n of inFolder(f.id)) {
           const { id, title = '', text = '', cardId = null, strokes = [], h = 1300 } = n;
@@ -2468,35 +2468,39 @@
   // Typing + Pencil area, opened inside a card or a Notes item.
   // A step's note is only created once you actually write something.
   // full = the page to go back to when the note is on the whole screen.
-  function mountEditor(host, n, { key, title, canDelete, full, onDone }) {
+  function mountEditor(host, n, { key, title, canDelete, full, onDone, onCreated }) {
     const own = title;  // your own notes (not a step's ✎ note) have a title, a folder and full screen
+    // Settings → Notes hides what you don't use, but never hides something already written.
+    const showTitle = title && (noteMode !== 'hand' || !!(n.title || '').trim());
+    const showText = noteMode !== 'hand' || !!(n.text || '').trim();
+    const showInk = noteMode !== 'type' || !!(n.strokes || []).length;
     host.innerHTML = `
       <div class="editor">
         <div class="ed-top">
-          ${title ? `<input class="title-in" placeholder="Title (optional)" value="${esc(n.title)}" data-title>` : ''}
+          ${showTitle ? `<input class="title-in" placeholder="Title (optional)" value="${esc(n.title)}" data-title>` : ''}
           <span class="saved"><span data-saved>${n.id ? 'Saved' : ''}</span>${own && n.updated ? `<span class="ed-date" data-eddate> · Edited ${shortDate(n)}</span>` : ''}</span>
           ${own && !full && n.id ? `<button class="icon-btn" data-expand aria-label="Full screen" title="Full screen">${icons.expand}</button>` : ''}
           <button class="btn primary small" data-done>Done</button>
         </div>
-        <textarea class="typed" placeholder="Type here, or write below with your Pencil…" data-text>${esc(n.text)}</textarea>
-        <div class="ink" data-ink></div>
+        ${showText ? `<textarea class="typed" placeholder="${showInk ? 'Type here, or write below with your Pencil…' : 'Type here…'}" data-text>${esc(n.text)}</textarea>` : ''}
+        ${showInk ? '<div class="ink" data-ink></div>' : ''}
         ${own ? `<div class="ed-foot">
-          <label class="fold-pick">Folder <select data-folder>${folders.map(f => `<option value="${esc(f.id)}" ${folderOf(n) === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>
+          <label class="fold-pick">Section <select data-folder>${folders.map(f => `<option value="${esc(f.id)}" ${folderOf(n) === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>
           ${canDelete && n.id ? '<button class="link danger-text" data-del>Delete</button>' : ''}
         </div>` : ''}
       </div>`;
     const ta = $('[data-text]', host), saved = $('[data-saved]', host);
-    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(64, ta.scrollHeight + 2) + 'px'; };
+    const grow = () => { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.max(showInk ? 64 : 220, ta.scrollHeight + 2) + 'px'; };
     grow();
-    const ed = editor = { key, id: n.id || null, host, n: { title: n.title || '', text: n.text || '', cardId: n.cardId || null, folder: n.folder || null, strokes: n.strokes || [], h: n.h || 900 }, dirty: false, timer: null, chain: Promise.resolve() };
+    const ed = editor = { key, id: n.id || null, host, n: { title: n.title || '', text: n.text || '', cardId: n.cardId || null, folder: n.folder || null, strokes: n.strokes || [], h: n.h || 900 }, dirty: false, timer: null, chain: Promise.resolve(), onCreated };
     ed.queue = () => { ed.dirty = true; saved.textContent = 'Saving…'; clearTimeout(ed.timer); ed.timer = setTimeout(() => flush(ed), 700); };
-    ed.ink = Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, palette: inkPalette, onPalette: saveInkPalette, pressure: !!(inkPalette && inkPalette.pressure), notify: toast,
+    ed.ink = !showInk ? { destroy() {} } : Ink.mount($('[data-ink]', host), { strokes: ed.n.strokes, h: ed.n.h, ruled: false, palette: inkPalette, onPalette: saveInkPalette, pressure: !!(inkPalette && inkPalette.pressure), notify: toast,
       onChange: ({ strokes, h }) => { ed.n.strokes = strokes; ed.n.h = h; ed.queue(); } });
-    ta.oninput = () => { ed.n.text = ta.value; grow(); ed.queue(); };
+    if (ta) ta.oninput = () => { ed.n.text = ta.value; grow(); ed.queue(); };
     const ti = $('[data-title]', host);
     if (ti) { ti.oninput = () => { ed.n.title = ti.value; ed.queue(); }; }
     // A brand-new note starts in the typing box (a title is optional).
-    if (ti && !n.title && !n.text) setTimeout(() => ta.focus({ preventScroll: true }), 50);
+    if (ta && own && !n.title && !n.text && !(n.strokes || []).length) setTimeout(() => ta.focus({ preventScroll: true }), 50);
     $('[data-done]', host).onclick = () => onDone ? onDone() : full ? (location.hash = full) : closeEditor();
     const fs = $('[data-folder]', host);
     if (fs) fs.onchange = () => { ed.n.folder = fs.value; ed.queue(); toast('Moved to ' + folders.find(f => f.id === fs.value).name); };
@@ -2511,6 +2515,10 @@
       full ? (location.hash = full) : refreshFlow();
     };
   }
+
+  // How you take notes (Settings → Notes): 'hand' (Pencil only), 'type', or 'both'. Synced.
+  let noteMode = local.get('noteMode', 'both');
+  function saveNoteMode(m) { noteMode = m; local.set('noteMode', m); Store.savePrefs({ noteMode: m }).catch(() => {}); }
 
   // Your pen + highlighter color presets (tap a chosen color again to change it). Synced.
   let inkPalette = local.get('inkPalette', null), inkTimer = null;
@@ -2528,7 +2536,9 @@
     if (JSON.stringify(n.strokes).length > 900000) { toast('This page is full. Start a new page for more drawing.'); return ed.chain; }
     ed.chain = ed.chain.then(async () => {
       try {
+        const had = ed.id;
         ed.id = await Store.saveNote({ id: ed.id || undefined, title: n.title, text: n.text, cardId: n.cardId, folder: n.folder || null, strokes: n.strokes, h: n.h });
+        if (!had && ed.id && ed.onCreated) ed.onCreated(ed.id);
         const s = $('[data-saved]', ed.host); if (s && !ed.dirty) s.textContent = 'Saved';
         const d = $('[data-eddate]', ed.host); if (d) d.textContent = ' · Edited ' + shortDate({ updated: Date.now() });
       } catch (e) { saveFailed(e); ed.dirty = true; }
@@ -2581,6 +2591,11 @@
         : signInForm('Sign in to sync notes + colors')}
       </section>
       <section class="panel">
+        <h2><span class="pill">Notes</span></h2>
+        <p class="small">How do you take notes? Hides what you don’t use (anything already written still shows).</p>
+        <div class="seg note-mode">${[['hand', 'Handwriting'], ['type', 'Typing'], ['both', 'Both']].map(([k, l]) => `<button data-notemode="${k}" class="${noteMode === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      </section>
+      <section class="panel">
         <h2><span class="pill">Colors</span></h2>
         <div class="looks">${Object.entries(LOOKS).map(([k, l]) => `<button class="look${theme.look === k ? ' on' : ''}" data-look="${k}" style="--a:${l.bg};--b:${l.peach};--c:${l.lav};--d:${l.text}"><span class="sw4"><i></i><i></i><i></i><i></i></span>${esc(l.name)}</button>`).join('')}</div>
         <div class="steps-row"><span>Step colors</span><div class="seg">${[['match', 'Matching (sage)'], ['phase', 'By phase']].map(([k, l]) => `<button data-steps="${k}" class="${theme.steps === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
@@ -2625,6 +2640,7 @@
       i.oninput = pick; i.onchange = pick;
     });
     $$('[data-reset]').forEach(b => b.onclick = resetTok);
+    $$('[data-notemode]').forEach(b => b.onclick = () => { saveNoteMode(b.dataset.notemode); $$('[data-notemode]').forEach(x => x.classList.toggle('on', x === b)); });
     $('[data-pressure]').onchange = e => { saveInkPalette({ ...(inkPalette || {}), pressure: e.target.checked }); };
     $('[data-inkreset]').onclick = () => { inkPalette = null; local.set('inkPalette', null); Store.savePrefs({ inkPalette: null }).catch(() => {}); toast("Pen + highlighter colors and sizes reset"); renderSettings(); };
     $('[data-resetall]').onclick = () => { theme.custom[theme.look] = {}; saveTheme(); renderSettings(); };
@@ -2716,6 +2732,8 @@
       if (p && p.quiz) { Object.assign(quiz, p.quiz); local.set('quiz', quiz); }
       else if (Object.keys(quiz.missed).length) saveQuiz();
       else if (Object.keys(edits.cards).length + Object.keys(edits.groups).length + Object.keys(edits.meds).length || edits.layout) saveEdits();
+      if (p && p.noteMode) { noteMode = p.noteMode; local.set('noteMode', noteMode); }
+      else if (noteMode !== 'both') Store.savePrefs({ noteMode }).catch(() => {});
       if (p && p.inkPalette !== undefined) { inkPalette = p.inkPalette; local.set('inkPalette', inkPalette); }
       else if (inkPalette) Store.savePrefs({ inkPalette }).catch(() => {});
       if (p && p.folders) { folders = p.folders; keepGeneral(); local.set('folders', folders); renameOldFolders(); }
