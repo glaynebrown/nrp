@@ -74,6 +74,7 @@
     ['clipboard', 'Clipboard', '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><path d="M9 14l2 2 4-4"/>'],
     ['stopwatch', 'Stopwatch', '<circle cx="12" cy="14" r="8"/><path d="M12 14v-4M10 2h4M12 2v4M19 7l1.5-1.5"/>'],
     ['lungs', 'Lungs', '<path d="M12 4v8M12 12l-3-2M12 12l3-2"/><path d="M8.5 7.5C6 8 3 12 3 16.5 3 19 4.5 20 6 20c2 0 3-1 3-3V9"/><path d="M15.5 7.5C18 8 21 12 21 16.5 21 19 19.5 20 18 20c-2 0-3-1-3-3V9"/>'],
+    ['tube', 'Breathing tube', '<rect x="5" y="2" width="6" height="4" rx="1"/><path d="M8 6v5a8 8 0 008 8h3"/><path d="M19 15.5V22"/><path d="M11 6v4.5a5 5 0 005 5h1"/>'],
     ['heart', 'Heart', '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0016.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4 3 5.5l7 7z"/><path d="M3.2 12H9l.5-1 2 4.5 2-7 1.5 3.5h5.3"/>'],
     ['drop', 'Drop', '<path d="M12 22a7 7 0 007-7c0-2-1-3.9-3-5.5S12.5 5.5 12 2.5c-.5 3-2 4.9-4 6.5S5 13 5 15a7 7 0 007 7z"/>'],
     ['chat', 'Speech bubbles', '<path d="M14 9a2 2 0 01-2 2H6l-4 4V4a2 2 0 012-2h8a2 2 0 012 2z"/><path d="M18 9h2a2 2 0 012 2v11l-4-4h-6a2 2 0 01-2-2v-1"/>'],
@@ -243,6 +244,23 @@
   let edits = local.get('edits', {});
   function applyEdits() {
     edits = { cards: {}, groups: {}, meds: {}, layout: null, ...edits };
+    // Oct 2026: the Intubation step was added. If you'd saved your own step order,
+    // slot it in after PPV (once), without touching anything else.
+    if (edits.layout && !edits.addedIntub) {
+      if (!edits.layout.some(g => g.id === 'g-intub')) {
+        const b = BASE.groups.find(g => g.id === 'g-intub'), at = edits.layout.findIndex(g => g.id === 'g-ppv');
+        if (b) edits.layout.splice(at < 0 ? Math.max(0, edits.layout.length - 1) : at + 1, 0, { id: b.id, cards: [...b.cards] });
+      }
+      edits.addedIntub = true;
+      if (typeof saveEdits === 'function') setTimeout(saveEdits);
+    }
+    // Same for the new UVC access card: put it before Epi in Compressions (once).
+    if (edits.layout && !edits.addedUvc) {
+      const g = edits.layout.find(x => x.cards.includes('epi') || x.id === 'g-cpr');
+      if (g && !edits.layout.some(x => x.cards.includes('uvc'))) { const at = g.cards.indexOf('epi'); g.cards.splice(at < 0 ? g.cards.length : at, 0, 'uvc'); }
+      edits.addedUvc = true;
+      if (typeof saveEdits === 'function') setTimeout(saveEdits);
+    }
     NRP.meds.forEach(m => Object.assign(m, copy(baseOf('meds', m.id)), edits.meds[m.id] || {}));
     const custom = Object.entries(edits.cards).filter(([, c]) => c.custom).map(([id, c]) => ({ id, phase: 'after', title: '', summary: '', lines: [], asides: [], ...c }));
     NRP.cards = [...BASE.cards.map(b => ({ ...copy(b), ...(edits.cards[b.id] || {}) })), ...custom];
@@ -370,7 +388,8 @@
     const cards = g.cards.map(id => CARD[id]), single = cards.length === 1;
     if (g.simple) return `
     <li class="big simple" data-id="${g.id}">
-      <div class="simple-row"><span class="bignum">${i + 1}</span><p class="simple-text">${md(cards[0].lines[0] || '')}</p></div>
+      <div class="simple-row"><span class="bignum">${i + 1}</span><div><p class="simple-text">${md(cards[0].lines[0] || '')}</p>
+        ${cards[0].lines.slice(1).map(l => `<p class="simple-note">${md(l)}</p>`).join('')}</div></div>
     </li>`;
     const isOpen = study || open.has(g.id);
     return `
@@ -610,11 +629,14 @@
   // Folders: [{id, name, icon, layout: 'list' | 'page'}] in your order, saved to your account.
   // The step folders are just a starting set: rename, reorder or delete them like any other.
   const STARTER_FOLDERS = [['f-prep', 'Prep', 'clipboard'], ['f-golden', 'Golden minute', 'stopwatch'], ['f-ppv', 'PPV', 'lungs'],
-    ['f-cpr', 'CPR', 'heart'], ['f-vol', 'Hypovolemia or PTX', 'drop'], ['f-debrief', 'Debrief', 'chat'], ['general', 'General', '']]
+    ['f-cpr', 'Compressions', 'heart'], ['f-vol', 'Hypovolemia or PTX', 'drop'], ['f-debrief', 'Debrief', 'chat'], ['general', 'General', '']]
     .map(([id, name, icon]) => ({ id, name, icon, layout: 'list' }));
   let folders = local.get('folders', null) || copy(STARTER_FOLDERS);
   const keepGeneral = () => { if (!folders.some(f => f.id === 'general')) folders.push({ id: 'general', name: 'General', icon: '', layout: 'list' }); };
   keepGeneral();
+  // Oct 2026: CPR was renamed Compressions (only if the folder still had the old name).
+  function renameOldFolders() { const f = folders.find(x => x.id === 'f-cpr'); if (f && f.name === 'CPR') { f.name = 'Compressions'; saveFolders(); } }
+  setTimeout(renameOldFolders);
   function saveFolders() { keepGeneral(); local.set('folders', folders); Store.savePrefs({ folders: copy(folders) }).catch(() => {}); }
   let noteSearch = '';
   const ownNotes = () => notes.filter(n => !n.cardId || (!CARD[n.cardId] && hasContent(n)));
@@ -954,16 +976,16 @@
       actions: [['HR ≥ 100', () => go('post', 'HR ≥ 100'), ''], ['Still 60–99', () => go('ppvcont', 'HR still 60–99'), ''], ['HR < 60', () => go('cpr', 'HR < 60 → compressions'), 'danger']],
     }),
     cpr: () => ({
-      title: 'Compressions', phase: 'cpr', countdown: { from: run.stepAt, secs: 60, label: '60 sec of CPR', done: 'Check HR' },
+      title: 'Compressions', phase: 'cpr', countdown: { from: run.stepAt, secs: 60, label: '60 sec of compressions', done: 'Check HR' },
       body: `${beat()}${checklist(['Intubate or laryngeal mask with **FiO₂ 100%**', 'Consider **cardiac monitoring**', 'Line: UVC or IO'])}`,
       actions: [['HR ≥ 60', () => go('ppv30', 'HR ≥ 60 → stop compressions, continue PPV'), ''], ['HR < 60', () => go('epi', 'HR still < 60 → epi'), 'danger']],
     }),
     epi: () => ({
-      title: 'Epinephrine 1:10,000', phase: 'cpr',
+      title: 'Epinephrine (1 mg/10 mL)', phase: 'cpr',
       body: `${weightPicker()}
         <div class="doses">
-          <div class="dose"><span>IV / IO</span><b data-fit>${epiSay('epiIV')[0]} mg = ${epiSay('epiIV')[1]} mL</b><small>then flush 3 mL NS</small></div>
-          <div class="dose"><span>ET (no line yet)</span><b data-fit>${epiSay('epiET')[0]} mg = ${epiSay('epiET')[1]} mL</b></div>
+          <div class="dose"><span>IV / IO</span><b data-fit>${epiSay('epiIV')[0]} mg = ${epiSay('epiIV')[1]} mL</b><small>1 mL syringe · push fast · flush 3 mL NS</small></div>
+          <div class="dose"><span>ET (no line yet)</span><b data-fit>${epiSay('epiET')[0]} mg = ${epiSay('epiET')[1]} mL</b><small>3–5 mL syringe · no flush</small></div>
         </div>
         ${run.epiAt ? `<p class="small">Last epi <b data-since="${run.epiAt}">${mmss(since(run.epiAt))}</b> ago. Repeat q 3–5 min.</p>` : ''}`,
       actions: [
@@ -1728,7 +1750,7 @@
     if (p.obstruct) add('Suctioned through the ETT', !!s.suction, 'Obstructed airway: intubate + suction (catheter or meconium aspirator).', 2);
     if (p.comp) {
       add('30 sec of effective ventilation before compressions', s.compFirst != null && s.effAtComp >= 30, 'Compressions only after 30 sec of ventilation that moves the chest.', 2);
-      add('Airway (ETT / laryngeal mask) with compressions', s.airway && s.airwayAt <= (s.compFirst ?? Infinity) + 30, 'Intubate or laryngeal mask when compressions start.');
+      add('Airway secured (ETT / laryngeal mask) before compressions', s.airway && s.airwayAt <= (s.compFirst ?? Infinity), 'Intubation or a laryngeal mask is recommended before starting compressions.');
       add('FiO₂ 100% during compressions', s.compFirst != null && (s.lowO2Comp || 0) <= 15, 'Compressions → 100% oxygen.');
       add('Cardiac monitor during compressions', s.compFirst != null && (s.noMonComp || 0) <= 30, 'Compressions → cardiac monitor.');
     }
@@ -1736,7 +1758,7 @@
     else if (p.comp && s.compHigh > 15) add('Stopped compressions once HR ≥ 60', false, 'HR ≥ 60 → stop compressions, keep ventilating.');
     if (p.epiNeed) {
       add('UVC or IO placed', !!s.line, 'Compressions → UVC or IO.');
-      add('Epi dose right (mg and mL)', s.epis.length && s.epis.every(e => e.ok), 'IV/IO 0.02 mg/kg = 0.2 mL/kg · ET 0.1 mg/kg = 1 mL/kg (1:10,000).', 2);
+      add('Epi dose right (mg and mL)', s.epis.length && s.epis.every(e => e.ok), 'UVC/IO 0.02 mg/kg = 0.2 mL/kg · ET 0.1 mg/kg = 1 mL/kg (1 mg/10 mL).', 2);
       if (s.epis.some(e => e.route === 'iv')) add('Flushed IV/IO epi with 3 mL NS', s.epis.filter(e => e.route === 'iv').every(e => e.flush), 'Flush 3 mL NS after each IV/IO dose.');
       if (s.epis.length > 1) add('Epi repeated every 3–5 min', s.epis.every((e, i) => !i || e.t - s.epis[i - 1].t >= 175), 'Not sooner than 3 min apart.');
     }
@@ -1799,8 +1821,9 @@
   function renderMeds() {
     view.innerHTML = `
       <section class="panel">
-        <h2><span class="pill">What does 1:10,000 mean?</span></h2>
+        <h2><span class="pill">What does 1 mg/10 mL mean?</span></h2>
         <div id="explain"></div>
+        <p class="small old-name">Older labels called this 1:10,000.</p>
       </section>
       <section class="panel">
         <h2><span class="pill">Dose calculator</span></h2>
@@ -1815,10 +1838,9 @@
   }
 
   const EXPLAIN = [
-    ['It’s a ratio', '**1 : 10,000** means **1 gram** of epi mixed into **10,000 mL** of fluid.', '1 g', '10,000 mL'],
-    ['Change grams to mg', '1 g = **1,000 mg**. So it’s **1,000 mg** in **10,000 mL**.', '1,000 mg', '10,000 mL'],
-    ['Shrink it to 1 mL', 'Divide both sides by 10,000: ==0.1 mg in every 1 mL==.', '0.1 mg', '1 mL'],
-    ['Compare to 1:1,000', '1:1,000 = ==1 mg/mL==. That’s **10× stronger** than 1:10,000. Mixing them up is the classic epi error.', '', ''],
+    ['Read the label', '**1 mg/10 mL** means **1 mg** of epi in **10 mL** of fluid.', '1 mg', '10 mL'],
+    ['Shrink it to 1 mL', 'Divide both sides by 10: ==0.1 mg in every 1 mL== (0.1 mg/mL).', '0.1 mg', '1 mL'],
+    ['Compare to 1 mg/mL', '1 mg/mL is **10× stronger** than 1 mg/10 mL. Mixing them up is the classic epi error.', '', ''],
   ];
   function renderExplain() {
     const host = $('#explain'), [h, txt, top, bot] = EXPLAIN[explainStep], last = explainStep === EXPLAIN.length - 1;
@@ -1830,9 +1852,9 @@
         <p>${md(txt)}</p>
         ${last ? `
           <div class="vials">
-            <figure><div class="vial"><div class="liquid">${dots(1)}</div></div><figcaption><b>1 mL of 1:10,000</b><br>0.1 mg</figcaption></figure>
-            <figure><div class="vial strong"><div class="liquid">${dots(10)}</div></div><figcaption><b>1 mL of 1:1,000</b><br>1 mg (10×!)</figcaption></figure>
-          </div><p class="small center">Each dot = 0.1 mg of epi. NRP uses <b>1:10,000 = 0.1 mg/mL</b>.</p>`
+            <figure><div class="vial"><div class="liquid">${dots(1)}</div></div><figcaption><b>1 mL of 1 mg/10 mL</b><br>0.1 mg</figcaption></figure>
+            <figure><div class="vial strong"><div class="liquid">${dots(10)}</div></div><figcaption><b>1 mL of 1 mg/mL</b><br>1 mg (10×!)</figcaption></figure>
+          </div><p class="small center">Each dot = 0.1 mg of epi. NRP uses <b>1 mg/10 mL = 0.1 mg/mL</b>.</p>`
         : `<div class="fraction"><span>${esc(top)}</span><hr><span>${esc(bot)}</span></div>`}
         <div class="row-end">
           <button class="btn ghost small" data-x="${explainStep - 1}" ${explainStep ? '' : 'disabled'}>Back</button>
@@ -1920,7 +1942,7 @@
     if (byGest) { const r = pick(NRP.weights); g = r[1]; lead = `A **${r[0]}** baby (estimate the weight)`; est = `Estimate: ${r[0]} ≈ ${gFmt(g)}`; }
     const d = doseFor(med, g), accept = doseAnswers(med, g);
     // Answered the way it's said in a code: "The dose is __ mg, which is __ mL."
-    return { text: `${lead} needs **${med.name}**${med.mgPerMl ? ' (1:10,000)' : ''}.`, parts: med.mgPerMl ? [['mg', d.mg], ['mL', d.ml]] : [['mL', d.ml]],
+    return { text: `${lead} needs **${med.name}**${med.mgPerMl ? ' (1 mg/10 mL)' : ''}.`, parts: med.mgPerMl ? [['mg', d.mg], ['mL', d.ml]] : [['mL', d.ml]],
       accept, work: [est, ...doseWork(med, g)].filter(Boolean) };
   }
   // What's said after: “The dose is 0.047 mg, which is 0.47 mL.” / “That’s 2.35 kg.”
@@ -1928,12 +1950,12 @@
     : `“The dose is ${q.parts.map(([u, a]) => `**${u === 'mg' ? fmtMg(a) : fmt(a)} ${u}**`).join(', which is ')}.”`;
   const sayLead = (q, j) => q.leads ? q.leads[j] : j ? 'which is' : 'The dose is';
   const CONCEPTS = [
-    () => ({ text: '1 mL of **1:10,000** epi contains how many mg?', choices: ['0.01 mg', '0.1 mg', '1 mg', '10 mg'], answer: '0.1 mg',
-      work: ['1 g in 10,000 mL = 1,000 mg in 10,000 mL', 'Divide by 10,000 → **0.1 mg per mL**'] }),
-    () => ({ text: 'Which is **10× stronger**?', choices: ['1:1,000', '1:10,000'], answer: '1:1,000',
-      work: ['1:1,000 = 1 mg/mL', '1:10,000 = 0.1 mg/mL', 'Bigger second number = more fluid = **weaker**'] }),
-    () => ({ text: '**1:10,000** written as mg/mL is…', choices: ['1 mg/mL', '0.1 mg/mL', '0.01 mg/mL'], answer: '0.1 mg/mL',
-      work: ['1,000 mg ÷ 10,000 mL = **0.1 mg/mL**'] }),
+    () => ({ text: '1 mL of **1 mg/10 mL** epi contains how many mg?', choices: ['0.01 mg', '0.1 mg', '1 mg', '10 mg'], answer: '0.1 mg',
+      work: ['1 mg in 10 mL', 'Divide by 10 → **0.1 mg per mL**'] }),
+    () => ({ text: 'Which is **10× stronger**?', choices: ['1 mg/mL', '1 mg/10 mL'], answer: '1 mg/mL',
+      work: ['1 mg/mL = 1 mg in each mL', '1 mg/10 mL = 0.1 mg in each mL', 'Same 1 mg spread through more fluid = **weaker**'] }),
+    () => ({ text: '**1 mg/10 mL** written as mg/mL is…', choices: ['1 mg/mL', '0.1 mg/mL', '0.01 mg/mL'], answer: '0.1 mg/mL',
+      work: ['1 mg ÷ 10 mL = **0.1 mg/mL**'] }),
     () => ({ text: 'Which route gets the **bigger** mL/kg dose of epi?', choices: ['IV/IO', 'ET'], answer: 'ET',
       work: ['IV/IO = 0.2 mL/kg', 'ET = **1 mL/kg** (less is absorbed through the lungs)'] }),
     () => ({ text: 'After an IV/IO epi push, flush with…', choices: ['1 mL NS', '3 mL NS', '10 mL/kg NS'], answer: '3 mL NS',
@@ -2006,8 +2028,8 @@
     quizTimer = setTimeout(() => Store.savePrefs({ quiz: copy(quiz) }).catch(() => {}), 800);
   }
   const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const QTYPE = { decide: 'What next?', value: 'Values', tf: 'True or false', wrong: 'Which is wrong?', dose: 'Dose math' };
-  const MIX = [['decide', 4], ['value', 2], ['tf', 1], ['wrong', 1], ['dose', 2]];
+  const QTYPE = { decide: 'What next?', value: 'Values', tf: 'True or false', wrong: 'Which is wrong?', all: 'Select all that apply', dose: 'Dose math' };
+  const MIX = [['decide', 3], ['value', 2], ['tf', 1], ['wrong', 1], ['all', 1], ['dose', 2]];
   const medById = id => NRP.meds.find(m => m.id === id);
   const others = (a, list, n = 3) => shuffle([...new Set(list.map(String))].filter(x => x !== String(a))).slice(0, n);
 
@@ -2043,18 +2065,19 @@
   const MADE = {
     'dose-conv': ['dose', () => { const c = convQ(); return { type: 'dose', card: 'epi', q: c.text, parts: c.parts, leads: c.leads, accept: c.accept, work: c.work }; }],
     'dose-epiIV': ['dose', () => doseQuiz('epiIV')], 'dose-epiET': ['dose', () => doseQuiz('epiET')], 'dose-ns': ['dose', () => doseQuiz('ns')],
-    'm-epiIV': ['value', () => mlQuiz('epiIV', '**IV/IO epi** dose (1:10,000)?')],
-    'm-epiET': ['value', () => mlQuiz('epiET', '**ET epi** dose (1:10,000)?')],
+    'm-epiIV': ['value', () => mlQuiz('epiIV', '**UVC/IO epi** dose (1 mg/10 mL)?')],
+    'm-epiET': ['value', () => mlQuiz('epiET', '**ET epi** dose (1 mg/10 mL)?')],
     'm-ns': ['value', () => mlQuiz('ns', '**Volume** dose (NS or O-neg blood)?')],
-    'm-conc': ['value', () => { const m = medById('epiIV'); return m && { type: 'value', card: 'epi', q: '**1:10,000** epi has how many mg in each mL?',
-      a: `${m.mgPerMl} mg`, no: others(m.mgPerMl, [0.01, 1, 10, 0.2]).map(v => v + ' mg'), why: '1:10,000 = ==0.1 mg== in every mL. (1:1,000 is 1 mg/mL, 10× stronger.)' }; }],
+    'm-conc': ['value', () => { const m = medById('epiIV'); return m && { type: 'value', card: 'epi', q: '**1 mg/10 mL** epi has how many mg in each mL?',
+      a: `${m.mgPerMl} mg`, no: others(m.mgPerMl, [0.01, 1, 10, 0.2]).map(v => v + ' mg'), why: '1 mg/10 mL = ==0.1 mg== in every mL. (1 mg/mL is 10× stronger.)' }; }],
     'm-spo2': ['value', spo2Quiz], 'm-ett-size': ['value', ettSizeQuiz], 'm-ett-depth': ['value', ettDepthQuiz],
   };
   function quizQ(id) {
     const q = MADE[id] ? MADE[id][1]() : copy((NRP.quiz || []).find(x => x.id === id) || null);
     if (!q) return null;
     q.id = id;
-    if (!q.parts && !q.choices) q.choices = q.type === 'tf' ? ['True', 'False'] : shuffle([q.a, ...(q.no || [])]);
+    if (!q.parts && !q.choices) q.choices = q.type === 'tf' ? ['True', 'False'] : q.type === 'all' ? shuffle([...q.a, ...(q.no || [])]) : shuffle([q.a, ...(q.no || [])]);
+    if (q.type === 'all') q.sel = [];
     return q;
   }
   const quizIds = type => [...(NRP.quiz || []).filter(x => x.type === type).map(x => x.id), ...Object.keys(MADE).filter(k => MADE[k][0] === type)];
@@ -2077,7 +2100,7 @@
     saveQuiz();
   }
   const doseSay = sayLine;
-  const answerText = q => q.parts ? doseSay(q) : q.type === 'wrong' ? `Wrong one: **${q.a}**` : `**${q.a}**`;
+  const answerText = q => q.parts ? doseSay(q) : q.type === 'wrong' ? `Wrong one: **${q.a}**` : q.type === 'all' ? q.a.map(x => `**${x}**`).join(' · ') : `**${q.a}**`;
   function goCard(q) {
     if (q.tab) { location.hash = '#/' + q.tab; return; }
     const g = NRP.groups.find(x => x.cards.includes(q.card)); if (!g) return;
@@ -2095,7 +2118,10 @@
     const q = round.qs[round.i];
     if (!q) return quizEnd(host);
     const n = round.qs.length, last = round.i === n - 1, link = cardLink(q);
-    const cls = c => !q.done ? '' : c === q.a ? ' right' : c === q.given ? ' wrong' : '';
+    const all = q.type === 'all';
+    // Select all: before Check, chosen ones are highlighted; after, right picks = green, wrong picks = red, missed right ones = outlined.
+    const cls = c => all ? (!q.done ? (q.sel.includes(c) ? ' sel' : '') : q.a.includes(c) ? (q.sel.includes(c) ? ' right' : ' missed') : q.sel.includes(c) ? ' wrong' : '')
+      : !q.done ? '' : c === q.a ? ' right' : c === q.given ? ' wrong' : '';
     host.innerHTML = `
       <div class="quiz-top">
         <span class="pill-count">${round.i + 1} / ${n}</span><span class="qtype">${QTYPE[q.type]}</span>
@@ -2103,8 +2129,10 @@
       </div>
       <section class="panel question quiz-q">
         <p class="q">${md(q.q)}</p>
-        ${q.choices ? `<div class="choices ${q.type === 'tf' || q.choices.every(c => c.length < 14) ? 'row' : 'stack'}">${q.choices.map(c =>
-          `<button class="btn ghost choice${cls(c)}" data-choice="${esc(c)}" ${q.done ? 'disabled' : ''}>${esc(c)}</button>`).join('')}</div>`
+        ${all ? '<p class="small select-hint">Tap every one that’s right, then Check.</p>' : ''}
+        ${q.choices ? `<div class="choices ${!all && (q.type === 'tf' || q.choices.every(c => c.length < 14)) ? 'row' : 'stack'}">${q.choices.map(c =>
+          `<button class="btn ghost choice${all ? ' multi' : ''}${cls(c)}" data-choice="${esc(c)}" ${q.done ? 'disabled' : ''} ${all ? `aria-pressed="${q.sel.includes(c)}"` : ''}>${all ? '<span class="tick"></span>' : ''}${esc(c)}</button>`).join('')}</div>
+          ${all && !q.done ? `<button class="btn primary" data-checkall ${q.sel.length ? '' : 'disabled'}>Check</button>` : ''}`
         : `<form class="answer say" data-form>
             ${q.parts.map(([unit], j) => `<span class="say-lead">${sayLead(q, j)}</span>
               <input type="text" inputmode="decimal" autocomplete="off" placeholder="${unit}" value="${esc(q.given?.[j] ?? '')}" ${q.done ? 'disabled' : ''} data-ans
@@ -2112,7 +2140,8 @@
             <button class="btn primary" ${q.done ? 'disabled' : ''}>Check</button></form>`}
         ${q.done ? `<div class="result ${q.ok ? 'ok' : 'no'}">
             <b>${q.ok ? 'Right! ✓' : 'Not quite.'}</b>
-            ${!q.ok && q.choices ? `<p>${q.type === 'wrong' ? 'The wrong one' : 'Answer'}: <b>${esc(q.a)}</b></p>` : ''}
+            ${!q.ok && q.choices ? all ? `<p>All the right ones:</p><ul class="all-ans">${q.a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
+              : `<p>${q.type === 'wrong' ? 'The wrong one' : 'Answer'}: <b>${esc(q.a)}</b></p>` : ''}
             ${q.parts ? `<p>${md(doseSay(q))}</p><ol>${q.work.map(w => `<li>${md(w)}</li>`).join('')}</ol>` : `<p>${md(q.why || '')}</p>`}
             ${q.id in quiz.missed ? `<p class="small">${quiz.missed[q.id] ? 'Right once. One more time and it’s off your missed list.' : 'Added to My missed ones.'}</p>`
               : round.kind === 'missed' && q.ok ? '<p class="small">Off your missed list. ✓</p>' : ''}
@@ -2135,7 +2164,12 @@
     }
     host.onclick = e => {
       const c = e.target.closest('[data-choice]');
+      if (c && !q.done && all) { const v = c.dataset.choice; q.sel = q.sel.includes(v) ? q.sel.filter(x => x !== v) : [...q.sel, v]; return renderQuiz(host); }
       if (c && !q.done) { answerQuiz(q, c.dataset.choice, c.dataset.choice === q.a); return renderQuiz(host); }
+      if (e.target.closest('[data-checkall]') && !q.done) {
+        const ok = q.sel.length === q.a.length && q.a.every(x => q.sel.includes(x));
+        answerQuiz(q, q.sel, ok); return renderQuiz(host);
+      }
       if (e.target.closest('[data-card]')) return goCard(q);
       if (e.target.closest('[data-qnext]')) {
         round.i++;
@@ -2238,7 +2272,9 @@
       <section class="panel light">
         <h2><span class="pill">ETT size + depth</span></h2>
         <table class="mini wide ett"><tr><th>Gestation</th><th>Weight</th><th>Depth</th><th>Size</th></tr>${NRP.ett.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td><b>${r[3]}</b></td></tr>`).join('')}</table>
-        <p class="small">Depth = tip of the tube to the upper gum, midline. Size in mm ID. *A 2.0 mm tube (optional) may be considered. Reference only. Follow your printed guide.</p>
+        <p class="small">Depth = tip of the tube to the upper gum, midline, or ${md('==nasal-tragus + 1 cm==')}. Size in mm ID. *A 2.0 mm tube (optional) may be considered.</p>
+        <p class="small">${md('Quick rule: ==> 34 wks ≈ 3.5 mm== · ==8F suction catheter== for a 3.5 tube · blade Miller ==1== term, ==0== preterm, ==00== extremely preterm.')}</p>
+        <p class="small">Reference only. Follow your printed guide.</p>
       </section>`;
     neopuff(); beatTrainer();
   }
@@ -2682,7 +2718,7 @@
       else if (Object.keys(edits.cards).length + Object.keys(edits.groups).length + Object.keys(edits.meds).length || edits.layout) saveEdits();
       if (p && p.inkPalette !== undefined) { inkPalette = p.inkPalette; local.set('inkPalette', inkPalette); }
       else if (inkPalette) Store.savePrefs({ inkPalette }).catch(() => {});
-      if (p && p.folders) { folders = p.folders; keepGeneral(); local.set('folders', folders); }
+      if (p && p.folders) { folders = p.folders; keepGeneral(); local.set('folders', folders); renameOldFolders(); }
       else saveFolders();
       seedPrepNote(p).then(() => updatePrepWeights(p));
     }
